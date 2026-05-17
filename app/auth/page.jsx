@@ -46,44 +46,46 @@ export default function AuthPage() {
     setSignupSuccess(false);
     setIsSubmitting(true);
     try {
-      await login(email, password);
+      // Step 1: Sign in with Supabase auth directly first (don't load profile yet)
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authUser.id)
-        .single();
-      const actualRole = profile?.role || 'student';
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-      // If selected role doesn't match actual role, block access
-      if (actualRole !== selectedRole) {
-        await supabase.auth.signOut();
-        setError(`This account is registered as a ${actualRole}. Please select the correct role to sign in.`);
+      if (signInError) {
+        if (signInError.message.toLowerCase().includes('email not confirmed')) {
+          setError('Please verify your email first. Check your inbox for the confirmation link.');
+        } else {
+          const { data } = await supabase.rpc('check_email_exists', { email_input: email }).maybeSingle();
+          if (data === false || data === null) {
+            setError('No account found with this email address. Please sign up first.');
+          } else {
+            setError('Incorrect password. Please try again.');
+          }
+        }
         return;
       }
 
+      // Step 2: Check actual role from DB before loading anything
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', signInData.user.id)
+        .single();
+
+      const actualRole = profile?.role || 'student';
+
+      // Step 3: If role doesn't match selected button, sign out and show error
+      if (actualRole !== selectedRole) {
+        await supabase.auth.signOut();
+        setError(`This account is registered as "${actualRole}". Please select the correct role to sign in.`);
+        return;
+      }
+
+      // Step 4: Role matches — now load the full profile into context and redirect
+      await login(email, password);
       router.push(`/${actualRole}/dashboard`);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Login failed';
-      if (msg.toLowerCase().includes('email not confirmed')) {
-        setError('Please verify your email first. Check your inbox for the confirmation link.');
-      } else if (
-        msg.toLowerCase().includes('invalid login credentials') ||
-        msg.toLowerCase().includes('invalid email or password')
-      ) {
-        const { createClient } = await import('@/lib/supabase');
-        const supabase = createClient();
-        const { data } = await supabase.rpc('check_email_exists', { email_input: email }).maybeSingle();
-        if (data === false || data === null) {
-          setError('No account found with this email address. Please sign up first.');
-        } else {
-          setError('Incorrect password. Please try again.');
-        }
-      } else {
-        setError(msg);
-      }
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setIsSubmitting(false);
     }
