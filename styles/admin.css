@@ -1,0 +1,48 @@
+/* ============================================================
+   ADMIN STYLES — Purple Theme
+   Used by: /app/admin/** pages
+   Layout:  AdminLayout → components/layout/AdminLayout.jsx
+   ============================================================ */
+
+/* Admin theme color palette */
+.admin-theme {
+  --color-primary: #7C3AED;
+  --color-primary-light: #cbb0f8;
+  --color-primary-muted: #f3f0ff;
+  --color-primary-hover: #b594f0;
+  --color-bg: #F3F0FF;
+  --color-accent-blue: #a8c1f7;
+  --color-accent-green: #9bd5c3;
+}
+
+/* Admin background */
+.admin-theme .page-bg {
+  background-color: var(--color-bg);
+}
+
+/* Admin primary button */
+.admin-theme .btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.admin-theme .btn-primary:hover {
+  background-color: var(--color-primary-hover);
+}
+
+/* Admin card header row */
+.admin-theme thead {
+  background-color: #f8f6ff;
+}
+
+/* Admin active nav link */
+.admin-theme .nav-active {
+  background: linear-gradient(135deg, #7C3AED 0%, #cbb0f8 100%);
+  color: #ffffff;
+}
+
+/* Admin badge */
+.admin-theme .badge-role {
+  background-color: var(--color-primary-muted);
+  color: var(--color-primary-light);
+}

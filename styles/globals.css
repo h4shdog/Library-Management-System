@@ -1,0 +1,12 @@
+/* ============================================================
+   GLOBAL STYLES — Shared across all roles
+   ============================================================
+   Role-specific styles are in separate files:
+   - admin.css   → Admin pages  (purple theme)
+   - staff.css   → Staff pages  (teal/green theme)
+   - student.css → Student pages (blue theme)
+   ============================================================ */
+
+@import './admin.css';
+@import './staff.css';
+@import './student.css';

@@ -1,0 +1,63 @@
+/* ============================================================
+   STUDENT STYLES — Blue/Indigo Theme
+   Used by: /app/student/** pages
+   Layout:  StudentLayout → components/layout/StudentLayout.jsx
+   ============================================================ */
+
+/* Student theme color palette */
+.student-theme {
+  --color-primary: #6B8DBA;
+  --color-primary-hover: #5A7BA8;
+  --color-primary-muted: #F0F5FF;
+  --color-bg: #F8F7F5;
+  --color-border: #E8E3DD;
+  --color-text-main: #4A4A4A;
+  --color-text-muted: #9B9B9B;
+  --color-success: #A8D5BA;
+  --color-warning: #F4E4A6;
+  --color-danger: #E8A8A8;
+  --color-accent-peach: #E8C4A8;
+}
+
+/* Student background */
+.student-theme .page-bg {
+  background-color: var(--color-bg);
+}
+
+/* Student primary button */
+.student-theme .btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.student-theme .btn-primary:hover {
+  background-color: var(--color-primary-hover);
+}
+
+/* Student card borders */
+.student-theme .card {
+  border-color: var(--color-border);
+}
+
+/* Student profile accent (peach) */
+.student-theme .accent-profile {
+  background-color: var(--color-accent-peach);
+}
+
+/* Student notification badges */
+.student-theme .badge-unread {
+  background-color: var(--color-primary-muted);
+  border: 1px solid var(--color-primary);
+}
+
+/* Student book card hover */
+.student-theme .book-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 4px 12px rgba(107, 141, 186, 0.15);
+}
+
+/* Student recommendation badge */
+.student-theme .badge-match {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
