@@ -47,7 +47,24 @@ export default function AuthPage() {
     setIsSubmitting(true);
     try {
       await login(email, password);
-      router.push(`/${selectedRole}/dashboard`);
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authUser.id)
+        .single();
+      const actualRole = profile?.role || 'student';
+
+      // If selected role doesn't match actual role, block access
+      if (actualRole !== selectedRole) {
+        await supabase.auth.signOut();
+        setError(`This account is registered as a ${actualRole}. Please select the correct role to sign in.`);
+        return;
+      }
+
+      router.push(`/${actualRole}/dashboard`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Login failed';
       if (msg.toLowerCase().includes('email not confirmed')) {
@@ -56,7 +73,6 @@ export default function AuthPage() {
         msg.toLowerCase().includes('invalid login credentials') ||
         msg.toLowerCase().includes('invalid email or password')
       ) {
-        // Check if the email exists to give a more specific message
         const { createClient } = await import('@/lib/supabase');
         const supabase = createClient();
         const { data } = await supabase.rpc('check_email_exists', { email_input: email }).maybeSingle();
