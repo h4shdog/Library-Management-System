@@ -33,6 +33,10 @@ export default function AuthPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState(false);
 
+  const [signupSuccess, setSignupSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   // If already logged in, redirect to their dashboard
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
@@ -46,9 +50,10 @@ export default function AuthPage() {
     setSignupSuccess(false);
     setIsSubmitting(true);
     try {
-      // Step 1: Sign in with Supabase auth directly first (don't load profile yet)
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
+
+      // Step 1: Sign in directly — don't call login() yet so no profile loads
       const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
       if (signInError) {
@@ -65,7 +70,7 @@ export default function AuthPage() {
         return;
       }
 
-      // Step 2: Check actual role from DB before loading anything
+      // Step 2: Check actual role from DB
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -74,14 +79,14 @@ export default function AuthPage() {
 
       const actualRole = profile?.role || 'student';
 
-      // Step 3: If role doesn't match selected button, sign out and show error
+      // Step 3: Role mismatch — sign out immediately and show error
       if (actualRole !== selectedRole) {
         await supabase.auth.signOut();
         setError(`This account is registered as "${actualRole}". Please select the correct role to sign in.`);
         return;
       }
 
-      // Step 4: Role matches — now load the full profile into context and redirect
+      // Step 4: Role matches — load profile into context and redirect
       await login(email, password);
       router.push(`/${actualRole}/dashboard`);
     } catch (err) {
@@ -90,10 +95,6 @@ export default function AuthPage() {
       setIsSubmitting(false);
     }
   };
-
-  const [signupSuccess, setSignupSuccess] = useState(false);
-  const [showPassword, setShowPassword]           = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSignUp = async (e) => {
     e.preventDefault();
