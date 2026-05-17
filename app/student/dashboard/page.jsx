@@ -94,7 +94,9 @@ function DashboardContent() {
       {/* Header */}
       <div>
         {(() => {
-          const isNew = user?.joinDate && new Date(user.joinDate).toDateString() === new Date().toDateString();
+          const today = new Date().toISOString().split('T')[0];
+          // New if joinDate is today OR joinDate is null (set by trigger, no explicit date)
+          const isNew = !user?.joinDate || user.joinDate === today;
           const firstName = user?.name?.split(' ')[0];
           return (
             <>
@@ -102,7 +104,7 @@ function DashboardContent() {
                 {isNew ? `Welcome, ${firstName} !` : `Welcome back, ${firstName} !`}
               </h1>
               <p className="text-sm text-slate-500 mt-1">
-                {isNew ? 'Great to have you here. Here\'s your library overview.' : 'Here\'s a quick overview of your library activity.'}
+                {isNew ? "Great to have you here. Here's your library overview." : "Here's a quick overview of your library activity."}
               </p>
             </>
           );
