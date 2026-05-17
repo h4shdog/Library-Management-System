@@ -73,6 +73,9 @@ export default function BookDetailsPage() {
     if (!error) {
       setAction(actionType);
       setUserHasRequest(true);
+    } else {
+      console.error('Request insert error:', error);
+      alert(`Failed to submit request: ${error.message}`);
     }
     setIsLoading(false);
   };
