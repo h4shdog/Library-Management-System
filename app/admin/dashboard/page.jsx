@@ -93,7 +93,11 @@ export default function AdminDashboard() {
       {/* Page header */}
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Welcome back, {user?.name}. Here's what's happening.</p>
+        <p className="text-sm text-slate-500 mt-1">
+          {user?.joinDate && new Date(user.joinDate).toDateString() === new Date().toDateString()
+            ? `Welcome, ${user?.name} !`
+            : `Welcome back, ${user?.name} !`} Here's what's happening.
+        </p>
       </div>
 
       {/* Stats */}

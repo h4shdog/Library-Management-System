@@ -93,8 +93,20 @@ function DashboardContent() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Welcome back, {user?.name?.split(' ')[0]} 👋</h1>
-        <p className="text-sm text-slate-500 mt-1">Here's a quick overview of your library activity.</p>
+        {(() => {
+          const isNew = user?.joinDate && new Date(user.joinDate).toDateString() === new Date().toDateString();
+          const firstName = user?.name?.split(' ')[0];
+          return (
+            <>
+              <h1 className="text-2xl font-bold text-slate-900">
+                {isNew ? `Welcome, ${firstName} !` : `Welcome back, ${firstName} !`}
+              </h1>
+              <p className="text-sm text-slate-500 mt-1">
+                {isNew ? 'Great to have you here. Here\'s your library overview.' : 'Here\'s a quick overview of your library activity.'}
+              </p>
+            </>
+          );
+        })()}
       </div>
 
       {/* Stats */}
