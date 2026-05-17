@@ -9,7 +9,6 @@ const _geistMono = Geist_Mono({ subsets: ["latin"] });
 export const metadata = {
   title: 'AI Library Management System',
   description: 'Comprehensive AI-based library management platform for students, staff, and administrators',
-  generator: 'v0.app',
   icons: {
     icon: [
       {
