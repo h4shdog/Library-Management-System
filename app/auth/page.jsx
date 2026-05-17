@@ -36,19 +36,23 @@ export default function AuthPage() {
   const [signupSuccess, setSignupSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [validatingRole, setValidatingRole] = useState(false);
 
   // If already logged in, redirect to their dashboard
+  // But NOT while we're in the middle of role validation
   useEffect(() => {
+    if (validatingRole) return;
     if (!isLoading && isAuthenticated && user) {
       router.replace(`/${user.role}/dashboard`);
     }
-  }, [isLoading, isAuthenticated, user, router]);
+  }, [isLoading, isAuthenticated, user, router, validatingRole]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
     setSignupSuccess(false);
     setIsSubmitting(true);
+    setValidatingRole(true); // block the redirect useEffect
     try {
       const { createClient } = await import('@/lib/supabase');
       const supabase = createClient();
@@ -86,13 +90,16 @@ export default function AuthPage() {
         return;
       }
 
-      // Step 4: Role matches — load profile into context and redirect
+      // Step 4: Role matches — allow redirect, load profile and go
+      setValidatingRole(false);
       await login(email, password);
       router.push(`/${actualRole}/dashboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
       setIsSubmitting(false);
+      // Keep validatingRole true if there's an error so redirect stays blocked
+      // It resets to false only on success (above) or on next login attempt
     }
   };
 
