@@ -69,7 +69,8 @@ export default function StaffRequestsPage() {
     const supabase = createClient();
     const req  = requests.find((r) => r.id === id);
     const book = getBook(req?.book_id);
-    const dueDate = new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+    const isEbook = req?.type === 'ebook_access';
+    const dueDate = isEbook ? null : new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
     const today = new Date().toISOString().split('T')[0];
 
     // 1. Update request status
@@ -80,21 +81,24 @@ export default function StaffRequestsPage() {
 
     if (error) return;
 
-    // 2. Decrement book availability
-    if (book && book.availability > 0) {
+    // 2. Decrement availability only for physical books
+    if (!isEbook && book && book.availability > 0) {
       await supabase
         .from('books')
         .update({ availability: book.availability - 1 })
         .eq('id', book.id);
-      await loadAllBooks(); // refresh allBooks in context
+      await loadAllBooks();
     }
 
-    // 3. Send notification to student
+    // 3. Send notification
     if (req?.user_id) {
+      const message = isEbook
+        ? `Your eBook access request for "${book?.title || 'a book'}" has been approved.${book?.ebookUrl ? ' You can now open it from your requests page.' : ''}`
+        : `Your ${req.type} request for "${book?.title || 'a book'}" has been approved. Please pick it up by ${new Date(dueDate).toLocaleDateString()}.`;
       await supabase.from('notifications').insert({
         user_id: req.user_id,
         title:   'Request Approved',
-        message: `Your ${req.type} request for "${book?.title || 'a book'}" has been approved. Please pick it up by ${new Date(dueDate).toLocaleDateString()}.`,
+        message,
         type:    'success',
         read:    false,
       });
@@ -102,7 +106,6 @@ export default function StaffRequestsPage() {
 
     // 4. Write borrowing record
     if (req?.user_id && book) {
-      // Fetch full profile for email (requests only joins name)
       const { data: profile } = await supabase
         .from('profiles')
         .select('name, email')
@@ -127,7 +130,6 @@ export default function StaffRequestsPage() {
       });
     }
 
-    // Update local state
     setRequests((r) =>
       r.map((x) => x.id === id ? { ...x, status: 'approved', due_date: dueDate } : x)
     );
@@ -314,6 +316,7 @@ export default function StaffRequestsPage() {
           {approved.map((req) => {
             const book = getBook(req.book_id);
             const isOverdue = req.due_date && new Date(req.due_date) < new Date();
+            const isEbook = req.type === 'ebook_access';
             return (
               <Card key={req.id} className="border border-emerald-100 bg-emerald-50 p-5 rounded-2xl">
                 <div className="flex items-start gap-4">
@@ -329,23 +332,30 @@ export default function StaffRequestsPage() {
                     <p className="text-sm font-bold text-slate-900">{book?.title || 'Unknown Book'}</p>
                     <p className="text-xs text-slate-400 mt-0.5">by {book?.author}</p>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Borrowed by: <span className="font-semibold">{req.profiles?.name || 'Unknown'}</span>
+                      {isEbook ? 'eBook access by: ' : 'Borrowed by: '}
+                      <span className="font-semibold">{req.profiles?.name || 'Unknown'}</span>
                     </p>
                     <div className="flex items-center gap-3 mt-2 text-xs">
-                      <span className={isOverdue ? 'text-red-500 font-semibold' : 'text-slate-500'}>
-                        Due: {req.due_date ? new Date(req.due_date).toLocaleDateString() : 'N/A'}
-                        {isOverdue && ' — OVERDUE'}
-                      </span>
+                      {isEbook ? (
+                        <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">eBook Access</Badge>
+                      ) : (
+                        <span className={isOverdue ? 'text-red-500 font-semibold' : 'text-slate-500'}>
+                          Due: {req.due_date ? new Date(req.due_date).toLocaleDateString() : 'N/A'}
+                          {isOverdue && ' — OVERDUE'}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <Button
-                    onClick={() => markReturned(req.id)}
-                    size="sm"
-                    variant="outline"
-                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-100 rounded-xl h-8 text-xs shrink-0"
-                  >
-                    Mark Returned
-                  </Button>
+                  {!isEbook && (
+                    <Button
+                      onClick={() => markReturned(req.id)}
+                      size="sm"
+                      variant="outline"
+                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-100 rounded-xl h-8 text-xs shrink-0"
+                    >
+                      Mark Returned
+                    </Button>
+                  )}
                 </div>
               </Card>
             );

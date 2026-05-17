@@ -39,6 +39,7 @@ const mapBook = (b, archivedIds = new Set()) => ({
   publisher:       b.publisher,
   tags:            b.tags || [],
   isbn:            b.isbn,
+  ebookUrl:        b.ebook_url || null,
   archived:        archivedIds.has(b.id),
 });
 
@@ -275,9 +276,9 @@ export function AuthProvider({ children }) {
       publisher:        newBook.publisher,
       tags:             newBook.tags || [],
       isbn:             newBook.isbn,
+      ebook_url:        newBook.ebookUrl || null,
     }).select().single();
     if (error) throw new Error(error.message);
-    // Optimistic: add to local state immediately
     if (data) setAllBooks((prev) => [...prev, mapBook(data)]);
   };
 
@@ -296,9 +297,9 @@ export function AuthProvider({ children }) {
       publisher:        updatedBook.publisher,
       tags:             updatedBook.tags || [],
       isbn:             updatedBook.isbn,
+      ebook_url:        updatedBook.ebookUrl || null,
     }).eq('id', updatedBook.id);
     if (error) throw new Error(error.message);
-    // Optimistic update
     setAllBooks((prev) => prev.map((b) => b.id === updatedBook.id ? { ...b, ...updatedBook } : b));
   };
 

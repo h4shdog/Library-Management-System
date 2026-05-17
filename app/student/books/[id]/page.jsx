@@ -22,6 +22,7 @@ export default function BookDetailsPage() {
   const [action, setAction] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [userHasRequest, setUserHasRequest] = useState(false);
+  const [userApprovedEbook, setUserApprovedEbook] = useState(false);
 
   useEffect(() => {
     if (!user || !bookId) return;
@@ -29,12 +30,17 @@ export default function BookDetailsPage() {
     const checkRequest = async () => {
       const { data } = await supabase
         .from('requests')
-        .select('id')
+        .select('id, status, type')
         .eq('user_id', user.id)
         .eq('book_id', bookId)
         .in('status', ['pending', 'approved'])
         .limit(1);
-      setUserHasRequest(data && data.length > 0);
+      if (data && data.length > 0) {
+        setUserHasRequest(true);
+        if (data[0].type === 'ebook_access' && data[0].status === 'approved') {
+          setUserApprovedEbook(true);
+        }
+      }
     };
     checkRequest();
   }, [user?.id, bookId]);
@@ -93,7 +99,9 @@ export default function BookDetailsPage() {
             <div>
               <p className="font-semibold text-[#4A6D55]">Request Submitted</p>
               <p className="text-sm text-[#7BA99D]">
-                Your {action} request for "{book.title}" has been submitted. Check your notifications for updates.
+                {action === 'ebook_access'
+                  ? `Your access request for "${book.title}" has been submitted. You'll be notified once approved.`
+                  : `Your ${action} request for "${book.title}" has been submitted. Check your notifications for updates.`}
               </p>
             </div>
           </Card>
@@ -135,23 +143,48 @@ export default function BookDetailsPage() {
 
                 {/* Action Buttons */}
                 <div className="space-y-3 pt-4 border-t border-[#E8E3DD]">
-                  <Button
-                    onClick={() => handleAction('borrow')}
-                    disabled={book.availability === 0 || userHasRequest || isLoading}
-                    className="w-full bg-[#6B8DBA] hover:bg-[#5A7BA8] text-white"
-                  >
-                    {isLoading ? 'Processing...' : 'Borrow Book'}
-                  </Button>
-                  <Button
-                    onClick={() => handleAction('reserve')}
-                    disabled={userHasRequest || isLoading}
-                    variant="outline"
-                    className="w-full border-[#E8E3DD] text-[#4A4A4A] hover:bg-[#F0EEEC]"
-                  >
-                    {isLoading ? 'Processing...' : 'Reserve Book'}
-                  </Button>
-                  {userHasRequest && (
-                    <p className="text-xs text-[#9B9B9B] text-center pt-2">You already have a request for this book</p>
+                  {book.bookType === 'ebook' ? (
+                    <>
+                      <Button
+                        onClick={() => handleAction('ebook_access')}
+                        disabled={userHasRequest || isLoading}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {isLoading ? 'Processing...' : userHasRequest ? 'Access Requested' : 'Request Access'}
+                      </Button>
+                      {/* Show Open eBook button if approved */}
+                      {userApprovedEbook && book.ebookUrl && (
+                        <a href={book.ebookUrl} target="_blank" rel="noopener noreferrer">
+                          <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                            <Tablet size={15} /> Open eBook
+                          </Button>
+                        </a>
+                      )}
+                      {userHasRequest && !userApprovedEbook && (
+                        <p className="text-xs text-[#9B9B9B] text-center pt-2">Waiting for staff approval</p>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => handleAction('borrow')}
+                        disabled={book.availability === 0 || userHasRequest || isLoading}
+                        className="w-full bg-[#6B8DBA] hover:bg-[#5A7BA8] text-white"
+                      >
+                        {isLoading ? 'Processing...' : 'Borrow Book'}
+                      </Button>
+                      <Button
+                        onClick={() => handleAction('reserve')}
+                        disabled={userHasRequest || isLoading}
+                        variant="outline"
+                        className="w-full border-[#E8E3DD] text-[#4A4A4A] hover:bg-[#F0EEEC]"
+                      >
+                        {isLoading ? 'Processing...' : 'Reserve Book'}
+                      </Button>
+                      {userHasRequest && (
+                        <p className="text-xs text-[#9B9B9B] text-center pt-2">You already have a request for this book</p>
+                      )}
+                    </>
                   )}
                 </div>
               </div>

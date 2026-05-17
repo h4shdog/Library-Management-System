@@ -265,6 +265,20 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
               />
             )}
           </div>
+
+          {/* eBook URL — only shown for ebook type */}
+          {formData.bookType === 'ebook' && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-bold text-slate-700">eBook URL</label>
+              <Input
+                value={formData.ebookUrl ?? ''}
+                onChange={(e) => handleChange('ebookUrl', e.target.value)}
+                placeholder="https://drive.google.com/... or any accessible link"
+                className={`border-slate-200 ${t.focusRing}`}
+              />
+              <p className="text-xs text-slate-400">Students will be redirected here after access is approved.</p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

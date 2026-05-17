@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { Calendar, X } from 'lucide-react';
+import { Calendar, X, ExternalLink } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -125,8 +125,24 @@ export default function MyRequestsPage() {
                               {daysLeft > 0 ? `${daysLeft}d left` : 'Due today'}
                             </span>
                           )}
-                          <Badge className="text-[10px] capitalize bg-white border border-slate-200 text-slate-500 px-1.5 py-0">{req.type}</Badge>
+                          <Badge className="text-[10px] capitalize bg-white border border-slate-200 text-slate-500 px-1.5 py-0">
+                            {req.type === 'ebook_access' ? 'eBook' : req.type}
+                          </Badge>
                         </div>
+                        {/* Open eBook button for approved ebook access */}
+                        {req.type === 'ebook_access' && req.status === 'approved' && book?.ebookUrl && (
+                          <a
+                            href={book.ebookUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            <ExternalLink size={11} /> Open eBook
+                          </a>
+                        )}
+                        {req.type === 'ebook_access' && req.status === 'approved' && !book?.ebookUrl && (
+                          <p className="text-xs text-slate-400 mt-1">eBook link not available yet</p>
+                        )}
                       </div>
                       <div className="flex flex-col items-end gap-2 shrink-0">
                         <StatusBadge status={req.status} />
