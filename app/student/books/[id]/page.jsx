@@ -235,7 +235,7 @@ export default function BookDetailsPage() {
                           {isLoading ? 'Processing...' : 'Request Access'}
                         </Button>
                       )}
-      {userApprovedEbook && book.ebookPath && (
+      {userApprovedEbook && (book.ebookPath || book.ebookUrl) && (
                         <>
                           <Button
                             onClick={async () => {
@@ -270,7 +270,7 @@ export default function BookDetailsPage() {
                           )}
                         </>
                       )}
-                      {userApprovedEbook && !book.ebookPath && (
+                      {userApprovedEbook && !book.ebookPath && !book.ebookUrl && (
                         <p className="text-xs text-slate-400 text-center pt-2">eBook file not available yet</p>
                       )}
                       {userHasRequest && !userApprovedEbook && (

@@ -33,10 +33,10 @@ export async function GET(request, { params }) {
 
   const bookId = params.id;
 
-  // 2. Fetch the book's storage path (never sent to client)
+  // 2. Fetch the book's storage path and legacy URL (never sent to client)
   const { data: book, error: bookError } = await supabase
     .from('books')
-    .select('ebook_path, book_type')
+    .select('ebook_path, ebook_url, book_type')
     .eq('id', bookId)
     .single();
 
@@ -44,7 +44,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({ error: 'Book not found' }, { status: 404 });
   }
 
-  if (book.book_type !== 'ebook' || !book.ebook_path) {
+  if (book.book_type !== 'ebook' || (!book.ebook_path && !book.ebook_url)) {
     return NextResponse.json({ error: 'No eBook available for this book' }, { status: 404 });
   }
 
@@ -78,14 +78,22 @@ export async function GET(request, { params }) {
     }
   }
 
-  // 4. Generate a signed URL valid for 1 hour — this is what the client receives
-  const { data: signed, error: signError } = await supabase.storage
-    .from('ebooks')
-    .createSignedUrl(book.ebook_path, 3600); // 1 hour
+  // 4. Serve the file:
+  //    - If uploaded to Supabase Storage → generate a 1-hour signed URL
+  //    - If legacy ebook_url exists (old Google/external link) → return it directly
+  //      (migrate these books by re-uploading the PDF via the admin panel)
+  if (book.ebook_path) {
+    const { data: signed, error: signError } = await supabase.storage
+      .from('ebooks')
+      .createSignedUrl(book.ebook_path, 3600); // 1 hour
 
-  if (signError || !signed?.signedUrl) {
-    return NextResponse.json({ error: 'Could not generate access link' }, { status: 500 });
+    if (signError || !signed?.signedUrl) {
+      return NextResponse.json({ error: 'Could not generate access link' }, { status: 500 });
+    }
+
+    return NextResponse.json({ url: signed.signedUrl });
   }
 
-  return NextResponse.json({ url: signed.signedUrl });
+  // Legacy fallback — book still has an external URL, not yet migrated
+  return NextResponse.json({ url: book.ebook_url });
 }
