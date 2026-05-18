@@ -23,6 +23,7 @@ export default function BookDetailsPage() {
   const [isLoading, setIsLoading]             = useState(false);
   const [userHasRequest, setUserHasRequest]   = useState(false);
   const [userApprovedEbook, setUserApprovedEbook] = useState(false);
+  const [ebookDueDate, setEbookDueDate]       = useState(null);
   const [blockReason, setBlockReason]         = useState(null);
   const [unpaidFine, setUnpaidFine]           = useState(0);
   const [maxBooks, setMaxBooks]               = useState(1);
@@ -42,7 +43,7 @@ export default function BookDetailsPage() {
       // 1. Check for this specific book request
       const { data: existing } = await supabase
         .from('requests')
-        .select('id, status, type')
+        .select('id, status, type, due_date')
         .eq('user_id', user.id)
         .eq('book_id', bookId)
         .in('status', ['pending', 'approved'])
@@ -51,7 +52,13 @@ export default function BookDetailsPage() {
       if (existing && existing.length > 0) {
         setUserHasRequest(true);
         if (existing[0].type === 'ebook_access' && existing[0].status === 'approved') {
-          setUserApprovedEbook(true);
+          // Check if due date has passed — if so, access is revoked
+          const due = existing[0].due_date ? new Date(existing[0].due_date) : null;
+          const isExpired = due && due < new Date();
+          if (!isExpired) {
+            setUserApprovedEbook(true);
+            setEbookDueDate(due);
+          }
         }
       }
 
@@ -211,19 +218,32 @@ export default function BookDetailsPage() {
                 <div className="space-y-3 pt-4 border-t border-[#E8E3DD]">
                   {book.bookType === 'ebook' ? (
                     <>
-                      <Button
-                        onClick={() => handleAction('ebook_access')}
-                        disabled={userHasRequest || isLoading || blockReason === 'fine'}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
-                      >
-                        {isLoading ? 'Processing...' : userHasRequest ? 'Access Requested' : 'Request Access'}
-                      </Button>
+                      {/* Only show request button if user doesn't have an active/approved request */}
+                      {!userHasRequest && (
+                        <Button
+                          onClick={() => handleAction('ebook_access')}
+                          disabled={isLoading || blockReason === 'fine'}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                        >
+                          {isLoading ? 'Processing...' : 'Request Access'}
+                        </Button>
+                      )}
                       {userApprovedEbook && book.ebookUrl && (
-                        <a href={book.ebookUrl} target="_blank" rel="noopener noreferrer">
-                          <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-                            <Tablet size={15} /> Open eBook
-                          </Button>
-                        </a>
+                        <>
+                          <a href={book.ebookUrl} target="_blank" rel="noopener noreferrer">
+                            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
+                              <Tablet size={15} /> Open eBook
+                            </Button>
+                          </a>
+                          {ebookDueDate && (
+                            <p className="text-xs text-slate-500 text-center">
+                              Access expires: {ebookDueDate.toLocaleDateString()}
+                            </p>
+                          )}
+                        </>
+                      )}
+                      {userApprovedEbook && !book.ebookUrl && (
+                        <p className="text-xs text-slate-400 text-center pt-2">eBook link not available yet</p>
                       )}
                       {userHasRequest && !userApprovedEbook && (
                         <p className="text-xs text-[#9B9B9B] text-center pt-2">Waiting for staff approval</p>
@@ -236,16 +256,19 @@ export default function BookDetailsPage() {
                         disabled={book.availability === 0 || userHasRequest || isLoading || isBlocked}
                         className="w-full bg-[#6B8DBA] hover:bg-[#5A7BA8] text-white disabled:opacity-50"
                       >
-                        {isLoading ? 'Processing...' : 'Borrow Book'}
+                        {isLoading ? 'Processing...' : book.availability === 0 ? 'Not Available' : 'Borrow Book'}
                       </Button>
                       <Button
                         onClick={() => handleAction('reserve')}
-                        disabled={userHasRequest || isLoading || isBlocked}
+                        disabled={book.availability > 0 || userHasRequest || isLoading || isBlocked}
                         variant="outline"
                         className="w-full border-[#E8E3DD] text-[#4A4A4A] hover:bg-[#F0EEEC] disabled:opacity-50"
                       >
                         {isLoading ? 'Processing...' : 'Reserve Book'}
                       </Button>
+                      {book.availability > 0 && (
+                        <p className="text-xs text-slate-400 text-center">Reserve is for when no copies are available</p>
+                      )}
                       {userHasRequest && !isBlocked && (
                         <p className="text-xs text-[#9B9B9B] text-center pt-2">You already have a request for this book</p>
                       )}

@@ -61,7 +61,10 @@ export default function RecommendationsPage() {
   }, [allBooks, prefs, history, allHistory, userRatings]);
 
   const handleSave = async (genres) => {
+    // Update prefs immediately and recompute recommendations right away
     setPrefs(genres);
+    const results = getSmartRecommendations(allBooks, genres, history, allHistory, userRatings, 24);
+    setRecommended(results);
     if (user) await updateUser({ ...user, preferredGenres: genres, preferencesSetup: true });
   };
 

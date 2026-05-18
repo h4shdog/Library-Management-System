@@ -203,20 +203,39 @@ export default function MyRequestsPage() {
                           </div>
                         )}
 
-                        {/* Open eBook button */}
-                        {req.type === 'ebook_access' && req.status === 'approved' && book?.ebookUrl && (
-                          <a
-                            href={book.ebookUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors"
-                          >
-                            <ExternalLink size={11} /> Open eBook
-                          </a>
-                        )}
-                        {req.type === 'ebook_access' && req.status === 'approved' && !book?.ebookUrl && (
-                          <p className="text-xs text-slate-400 mt-1">eBook link not available yet</p>
-                        )}
+                        {/* Open eBook button — only if approved, has URL, and due date not passed */}
+                        {req.type === 'ebook_access' && req.status === 'approved' && (() => {
+                          const due = req.due_date ? new Date(req.due_date) : null;
+                          const isExpired = due && due < new Date();
+                          if (isExpired) {
+                            return (
+                              <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 border border-slate-200 rounded-lg w-fit">
+                                <AlertTriangle size={11} className="text-slate-400" />
+                                <span className="text-xs text-slate-500">eBook access expired ({due.toLocaleDateString()})</span>
+                              </div>
+                            );
+                          }
+                          if (book?.ebookUrl) {
+                            return (
+                              <div className="mt-2 flex flex-col gap-1">
+                                <a
+                                  href={book.ebookUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors w-fit"
+                                >
+                                  <ExternalLink size={11} /> Open eBook
+                                </a>
+                                {due && (
+                                  <span className="text-[10px] text-slate-400">
+                                    Access until {due.toLocaleDateString()}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+                          return <p className="text-xs text-slate-400 mt-1">eBook link not available yet</p>;
+                        })()}
                       </div>
 
                       <div className="flex flex-col items-end gap-2 shrink-0">
