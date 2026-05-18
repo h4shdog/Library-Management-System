@@ -24,6 +24,8 @@ export default function BookDetailsPage() {
   const [userHasRequest, setUserHasRequest]   = useState(false);
   const [userApprovedEbook, setUserApprovedEbook] = useState(false);
   const [ebookDueDate, setEbookDueDate]       = useState(null);
+  const [ebookSignedUrl, setEbookSignedUrl]   = useState(null);
+  const [isLoadingEbook, setIsLoadingEbook]   = useState(false);
   const [blockReason, setBlockReason]         = useState(null);
   const [unpaidFine, setUnpaidFine]           = useState(0);
   const [maxBooks, setMaxBooks]               = useState(1);
@@ -233,13 +235,34 @@ export default function BookDetailsPage() {
                           {isLoading ? 'Processing...' : 'Request Access'}
                         </Button>
                       )}
-                      {userApprovedEbook && book.ebookUrl && (
+      {userApprovedEbook && book.ebookPath && (
                         <>
-                          <a href={book.ebookUrl} target="_blank" rel="noopener noreferrer">
-                            <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-                              <Tablet size={15} /> Open eBook
-                            </Button>
-                          </a>
+                          <Button
+                            onClick={async () => {
+                              setIsLoadingEbook(true);
+                              try {
+                                const res = await fetch(`/api/ebook/${book.id}`);
+                                const data = await res.json();
+                                if (data.url) {
+                                  setEbookSignedUrl(data.url);
+                                  window.open(data.url, '_blank', 'noopener,noreferrer');
+                                } else {
+                                  alert(data.error || 'Could not open eBook. Please try again.');
+                                }
+                              } catch {
+                                alert('Could not open eBook. Please try again.');
+                              } finally {
+                                setIsLoadingEbook(false);
+                              }
+                            }}
+                            disabled={isLoadingEbook}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                          >
+                            {isLoadingEbook
+                              ? 'Opening...'
+                              : <><Tablet size={15} /> Open eBook</>
+                            }
+                          </Button>
                           {ebookDueDate && (
                             <p className="text-xs text-slate-500 text-center">
                               Access expires: {ebookDueDate.toLocaleDateString()}
@@ -247,8 +270,8 @@ export default function BookDetailsPage() {
                           )}
                         </>
                       )}
-                      {userApprovedEbook && !book.ebookUrl && (
-                        <p className="text-xs text-slate-400 text-center pt-2">eBook link not available yet</p>
+                      {userApprovedEbook && !book.ebookPath && (
+                        <p className="text-xs text-slate-400 text-center pt-2">eBook file not available yet</p>
                       )}
                       {userHasRequest && !userApprovedEbook && (
                         <p className="text-xs text-[#9B9B9B] text-center pt-2">Waiting for staff approval</p>

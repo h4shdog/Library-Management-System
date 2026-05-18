@@ -6,11 +6,12 @@
 // ============================================================
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { X, BookOpen, Tablet } from 'lucide-react';
+import { X, BookOpen, Tablet, Upload, FileText, Loader2 } from 'lucide-react';
+import { createClient } from '@/lib/supabase';
 
 const CATEGORIES = [
   'Fiction', 'Non-fiction', 'Mystery', 'Sci-Fi', 'Romance',
@@ -57,12 +58,16 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
   const [formData, setFormData] = useState(book || emptyForm);
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+  const [pdfFile, setPdfFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
       // Merge book over emptyForm so every field always has a defined value
       setFormData(book ? { ...emptyForm, ...book } : { ...emptyForm });
       setErrors({});
+      setPdfFile(null);
     }
   }, [isOpen, book]);
 
@@ -86,18 +91,59 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
                                            newErrors.totalCopies     = 'Total copies must be at least 1';
     if (formData.availability < 0 || formData.availability > formData.totalCopies)
                                            newErrors.availability    = 'Available copies cannot exceed total copies';
-    if (formData.bookType === 'ebook' && !formData.ebookUrl?.trim())
-                                           newErrors.ebookUrl        = 'eBook URL is required for eBook type';
+    // For ebooks: require either an existing stored path or a new file being uploaded
+    if (formData.bookType === 'ebook' && !formData.ebookPath && !pdfFile)
+                                           newErrors.ebookFile       = 'Please upload a PDF file for this eBook';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const handlePdfSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      setErrors((prev) => ({ ...prev, ebookFile: 'Only PDF files are allowed' }));
+      return;
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      setErrors((prev) => ({ ...prev, ebookFile: 'File size must be under 50 MB' }));
+      return;
+    }
+    setPdfFile(file);
+    setErrors((prev) => { const n = { ...prev }; delete n.ebookFile; return n; });
+  };
+
+  const uploadPdf = async (bookId) => {
+    if (!pdfFile) return formData.ebookPath || null;
+    setIsUploading(true);
+    try {
+      const supabase = createClient();
+      const ext = pdfFile.name.split('.').pop();
+      const path = `ebooks/${bookId}.${ext}`;
+
+      // Remove old file if replacing
+      if (formData.ebookPath) {
+        await supabase.storage.from('ebooks').remove([formData.ebookPath]);
+      }
+
+      const { error } = await supabase.storage
+        .from('ebooks')
+        .upload(path, pdfFile, { upsert: true, contentType: 'application/pdf' });
+
+      if (error) throw new Error(error.message);
+      return path;
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleSave = async () => {
     if (!validateForm()) return;
     setIsSaving(true);
     try {
-      await new Promise((r) => setTimeout(r, 500));
-      onSave({ ...formData, id: book?.id || `book-${Date.now()}` });
+      const bookId = book?.id || `book-${Date.now()}`;
+      const ebookPath = formData.bookType === 'ebook' ? await uploadPdf(bookId) : null;
+      onSave({ ...formData, id: bookId, ebookPath, ebookUrl: null });
       onClose();
     } finally {
       setIsSaving(false);
@@ -296,19 +342,68 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
             )}
           </div>
 
-          {/* eBook URL — only shown for ebook type */}
+          {/* eBook File Upload — only shown for ebook type */}
           {formData.bookType === 'ebook' && (
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">eBook URL *</label>
-              <Input
-                value={formData.ebookUrl ?? ''}
-                onChange={(e) => handleChange('ebookUrl', e.target.value)}
-                placeholder="https://drive.google.com/... or any accessible link"
-                className={`border-slate-200 ${t.focusRing} ${errors.ebookUrl ? 'border-red-500' : ''}`}
+              <label className="text-sm font-bold text-slate-700">eBook PDF *</label>
+
+              {/* Show existing file info when editing */}
+              {formData.ebookPath && !pdfFile && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                  <FileText size={16} className="text-blue-500 shrink-0" />
+                  <span className="text-xs text-slate-600 font-medium truncate flex-1">
+                    Current file: {formData.ebookPath.split('/').pop()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="text-xs text-blue-600 font-semibold hover:underline shrink-0"
+                  >
+                    Replace
+                  </button>
+                </div>
+              )}
+
+              {/* New file selected */}
+              {pdfFile && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200">
+                  <FileText size={16} className="text-blue-500 shrink-0" />
+                  <span className="text-xs text-slate-700 font-medium truncate flex-1">{pdfFile.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => { setPdfFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
+              {/* Upload button — shown when no file selected yet (and no existing path) */}
+              {!pdfFile && !formData.ebookPath && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`w-full flex flex-col items-center gap-2 p-4 rounded-xl border-2 border-dashed transition-colors
+                    ${errors.ebookFile ? 'border-red-400 bg-red-50' : 'border-slate-200 bg-slate-50 hover:border-blue-300 hover:bg-blue-50'}`}
+                >
+                  <Upload size={20} className="text-slate-400" />
+                  <span className="text-xs text-slate-500 font-medium">Click to upload PDF</span>
+                  <span className="text-xs text-slate-400">Max 50 MB</span>
+                </button>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handlePdfSelect}
               />
-              {errors.ebookUrl
-                ? <p className="text-xs text-red-500 font-semibold">{errors.ebookUrl}</p>
-                : <p className="text-xs text-slate-400">Students will be redirected here after access is approved.</p>
+
+              {errors.ebookFile
+                ? <p className="text-xs text-red-500 font-semibold">{errors.ebookFile}</p>
+                : <p className="text-xs text-slate-400">PDF will be stored securely. Students access it only after approval.</p>
               }
             </div>
           )}
@@ -325,10 +420,12 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
           </Button>
           <Button
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || isUploading}
             className={`flex-1 font-bold shadow-sm ${t.saveBtn}`}
           >
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isUploading ? (
+              <span className="flex items-center gap-2"><Loader2 size={15} className="animate-spin" /> Uploading...</span>
+            ) : isSaving ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </Card>
