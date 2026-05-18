@@ -184,18 +184,7 @@ export default function MyRequestsPage() {
         <p className="text-sm text-slate-500 mt-1">Manage your borrowing and reservation requests</p>
       </div>
 
-      {/* Unpaid fine banner */}
-      {totalUnpaidFine > 0 && (
-        <Card className="border-red-200 bg-red-50 p-4 flex items-start gap-3">
-          <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-bold text-red-700">Outstanding Fine: ₱{totalUnpaidFine.toFixed(2)}</p>
-            <p className="text-xs text-red-600 mt-0.5">
-              You have an unpaid fine. Please settle your payment at the library counter. You cannot borrow or reserve books until this is cleared.
-            </p>
-          </div>
-        </Card>
-      )}
+
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
