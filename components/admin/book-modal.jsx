@@ -119,7 +119,7 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
     try {
       const supabase = createClient();
       const ext = pdfFile.name.split('.').pop();
-      const path = `ebooks/${bookId}.${ext}`;
+      const path = `${bookId}.${ext}`;
 
       // Remove old file if replacing
       if (formData.ebookPath) {
