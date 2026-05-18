@@ -34,9 +34,14 @@ export function StatusBadge({ status, className = '' }) {
       text: '#6B6055',
       label: 'Returned',
     },
+    return_requested: {
+      bg: '#C7D9F5',
+      text: '#2D5FA6',
+      label: 'Return Requested',
+    },
   };
 
-  const config = statusConfig[status];
+  const config = statusConfig[status] ?? { bg: '#E2E8F0', text: '#64748B', label: status ?? '—' };
 
   return (
     <Badge

@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle, XCircle, Clock, AlertTriangle, PhilippinePeso } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, AlertTriangle, PhilippinePeso, RotateCcw } from 'lucide-react';
 
 const FINE_PER_DAY = 5; // ₱5 per day overdue — overridden by library_settings
 
@@ -217,11 +217,12 @@ export default function StaffRequestsPage() {
     setRequests((r) => r.map((x) => x.id === id ? { ...x, fine_paid: true } : x));
   };
 
-  const pending  = requests.filter((r) => r.status === 'pending');
-  const approved = requests.filter((r) => r.status === 'approved');
-  const rejected = requests.filter((r) => r.status === 'rejected');
-  const withFines = requests.filter((r) => r.fine_amount > 0);
-  const unpaidFines = withFines.filter((r) => !r.fine_paid);
+  const pending         = requests.filter((r) => r.status === 'pending');
+  const approved        = requests.filter((r) => r.status === 'approved');
+  const returnRequested = requests.filter((r) => r.status === 'return_requested');
+  const rejected        = requests.filter((r) => r.status === 'rejected');
+  const withFines       = requests.filter((r) => r.fine_amount > 0);
+  const unpaidFines     = withFines.filter((r) => !r.fine_paid);
 
   return (
     <div className="space-y-6">
@@ -240,9 +241,14 @@ export default function StaffRequestsPage() {
       <div className="flex gap-2">
         <button
           onClick={() => setActiveTab('requests')}
-          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${activeTab === 'requests' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all flex items-center gap-1.5 ${activeTab === 'requests' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
         >
           Requests
+          {(pending.length + returnRequested.length) > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === 'requests' ? 'bg-white text-emerald-600' : 'bg-emerald-500 text-white'}`}>
+              {pending.length + returnRequested.length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => setActiveTab('fines')}
@@ -261,11 +267,12 @@ export default function StaffRequestsPage() {
       {activeTab === 'requests' && (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-4 gap-4">
             {[
-              { label: 'Pending',  value: pending.length,  color: 'text-amber-600',   bg: 'bg-amber-50',   icon: Clock },
-              { label: 'Approved', value: approved.length, color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle },
-              { label: 'Rejected', value: rejected.length, color: 'text-red-600',     bg: 'bg-red-50',     icon: XCircle },
+              { label: 'Pending',         value: pending.length,         color: 'text-amber-600',   bg: 'bg-amber-50',   icon: Clock },
+              { label: 'Approved',        value: approved.length,        color: 'text-emerald-600', bg: 'bg-emerald-50', icon: CheckCircle },
+              { label: 'Return Requests', value: returnRequested.length, color: 'text-blue-600',    bg: 'bg-blue-50',    icon: RotateCcw },
+              { label: 'Rejected',        value: rejected.length,        color: 'text-red-600',     bg: 'bg-red-50',     icon: XCircle },
             ].map((s, i) => {
               const Icon = s.icon;
               return (
@@ -316,6 +323,58 @@ export default function StaffRequestsPage() {
                           <XCircle size={13} /> Reject
                         </Button>
                       </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Return Requests */}
+          {returnRequested.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <RotateCcw size={14} className="text-blue-500" />
+                <p className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Return Requests ({returnRequested.length})</p>
+              </div>
+              {returnRequested.map((req) => {
+                const book     = getBook(req.book_id);
+                const isOverdue = req.due_date && new Date(req.due_date) < new Date();
+                const fine     = calcFine(req.due_date, fineRate);
+                return (
+                  <Card key={req.id} className="border border-blue-200 bg-blue-50 p-5 rounded-2xl">
+                    <div className="flex items-start gap-4">
+                      {book && (
+                        <img src={book.cover || 'https://images.unsplash.com/photo-1507842217343-583f7270bfda?w=48&h=64&fit=crop'} alt={book.title}
+                          className="w-12 h-16 object-cover rounded-xl shrink-0"
+                          onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1507842217343-583f7270bfda?w=48&h=64&fit=crop'; }} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-900">{book?.title || 'Unknown Book'}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">by {book?.author}</p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Returning by: <span className="font-semibold">{req.profiles?.name || 'Unknown'}</span>
+                        </p>
+                        <div className="flex items-center gap-3 mt-2 text-xs">
+                          <span className={isOverdue ? 'text-red-600 font-bold' : 'text-slate-500'}>
+                            Due: {req.due_date ? new Date(req.due_date).toLocaleDateString() : 'N/A'}
+                            {isOverdue && ` — OVERDUE`}
+                          </span>
+                          {fine > 0 && (
+                            <span className="text-red-600 font-semibold">Fine: ₱{fine.toFixed(2)}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-blue-600 mt-1.5 font-medium">
+                          Student has requested to return this book. Verify receipt and confirm.
+                        </p>
+                      </div>
+                      <Button
+                        onClick={() => markReturned(req.id)}
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-8 gap-1.5 text-xs shrink-0"
+                      >
+                        <CheckCircle size={13} /> Mark Returned
+                      </Button>
                     </div>
                   </Card>
                 );

@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { Calendar, X, ExternalLink, AlertTriangle } from 'lucide-react';
+import { Calendar, X, ExternalLink, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -20,16 +20,18 @@ import {
 const FINE_PER_DAY = 5; // fallback — overridden by library_settings
 
 const statusStyle = {
-  pending:   { card: 'border-amber-100 bg-amber-50',     dot: 'bg-amber-400' },
-  approved:  { card: 'border-emerald-100 bg-emerald-50', dot: 'bg-emerald-500' },
-  completed: { card: 'border-slate-100 bg-slate-50',     dot: 'bg-slate-400' },
-  rejected:  { card: 'border-red-100 bg-red-50',         dot: 'bg-red-400' },
+  pending:          { card: 'border-amber-100 bg-amber-50',     dot: 'bg-amber-400' },
+  approved:         { card: 'border-emerald-100 bg-emerald-50', dot: 'bg-emerald-500' },
+  return_requested: { card: 'border-blue-100 bg-blue-50',       dot: 'bg-blue-400' },
+  completed:        { card: 'border-slate-100 bg-slate-50',     dot: 'bg-slate-400' },
+  rejected:         { card: 'border-red-100 bg-red-50',         dot: 'bg-red-400' },
 };
 
 export default function MyRequestsPage() {
   const { user, allBooks } = useAuth();
   const [requests, setRequests] = useState([]);
-  const [confirm, setConfirm]   = useState({ isOpen: false, id: null, title: '' });
+  const [confirm, setConfirm]         = useState({ isOpen: false, id: null, title: '' });
+  const [returnConfirm, setReturnConfirm] = useState({ isOpen: false, id: null, title: '' });
   const [fineRate, setFineRate] = useState(FINE_PER_DAY);
 
   useEffect(() => {
@@ -68,6 +70,44 @@ export default function MyRequestsPage() {
     setConfirm({ isOpen: false, id: null, title: '' });
   };
 
+  // Student requests to return a physical book
+  const requestReturn = async (id) => {
+    const supabase = createClient();
+    const req  = requests.find((r) => r.id === id);
+    const book = getBook(req?.book_id);
+
+    const { error } = await supabase
+      .from('requests')
+      .update({ status: 'return_requested' })
+      .eq('id', id);
+
+    if (error) {
+      console.error('Return request error:', error);
+      setReturnConfirm({ isOpen: false, id: null, title: '' });
+      return;
+    }
+
+    // Notify all staff — fetch staff profiles
+    const { data: staffProfiles } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'staff');
+
+    if (staffProfiles?.length) {
+      const notifications = staffProfiles.map((s) => ({
+        user_id: s.id,
+        title:   'Book Return Request',
+        message: `${user?.name || 'A student'} has requested to return "${book?.title || 'a book'}". Please verify and mark it as returned.`,
+        type:    'info',
+        read:    false,
+      }));
+      await supabase.from('notifications').insert(notifications);
+    }
+
+    setRequests((r) => r.map((x) => x.id === id ? { ...x, status: 'return_requested' } : x));
+    setReturnConfirm({ isOpen: false, id: null, title: '' });
+  };
+
   // Compute fine for a request
   const computeFine = (req) => {
     if (!req.due_date || req.type === 'ebook_access') return 0;
@@ -84,15 +124,16 @@ export default function MyRequestsPage() {
   }, 0);
 
   const groups = {
-    pending:   requests.filter((r) => r.status === 'pending'),
-    approved:  requests.filter((r) => r.status === 'approved'),
-    completed: requests.filter((r) => r.status === 'completed'),
-    rejected:  requests.filter((r) => r.status === 'rejected'),
+    pending:          requests.filter((r) => r.status === 'pending'),
+    approved:         requests.filter((r) => r.status === 'approved'),
+    return_requested: requests.filter((r) => r.status === 'return_requested'),
+    completed:        requests.filter((r) => r.status === 'completed'),
+    rejected:         requests.filter((r) => r.status === 'rejected'),
   };
 
   const stats = [
     { label: 'Pending',   count: groups.pending.length,   color: 'text-amber-600',   bg: 'bg-amber-50' },
-    { label: 'Approved',  count: groups.approved.length,  color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { label: 'Approved',  count: groups.approved.length + groups.return_requested.length,  color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { label: 'Completed', count: groups.completed.length, color: 'text-slate-600',   bg: 'bg-slate-50' },
     { label: 'Rejected',  count: groups.rejected.length,  color: 'text-red-600',     bg: 'bg-red-50' },
   ];
@@ -132,12 +173,13 @@ export default function MyRequestsPage() {
       {Object.entries(groups).map(([status, items]) => {
         if (items.length === 0) return null;
         const style = statusStyle[status] || statusStyle.completed;
+        const groupLabel = status === 'return_requested' ? 'Return Requested' : status;
         return (
           <div key={status} className="space-y-2">
             <div className="flex items-center gap-2">
               <div className={`w-2 h-2 rounded-full ${style.dot}`} />
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider capitalize">
-                {status} ({items.length})
+                {groupLabel} ({items.length})
               </p>
             </div>
             <div className="space-y-2">
@@ -148,6 +190,10 @@ export default function MyRequestsPage() {
                 const daysLeft  = req.due_date && req.status === 'approved'
                   ? Math.ceil((new Date(req.due_date) - Date.now()) / 86400000)
                   : null;
+                // Show return button only for approved physical borrow/reserve requests
+                const canReturn = req.status === 'approved'
+                  && req.type !== 'ebook_access'
+                  && req.type !== 'reserve';
 
                 return (
                   <Card key={req.id} className={`border ${isOverdue ? 'border-red-200 bg-red-50' : style.card} p-4 rounded-2xl`}>
@@ -203,6 +249,14 @@ export default function MyRequestsPage() {
                           </div>
                         )}
 
+                        {/* Return requested notice */}
+                        {req.status === 'return_requested' && (
+                          <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 border border-blue-200 rounded-lg w-fit">
+                            <RotateCcw size={11} className="text-blue-500" />
+                            <span className="text-xs text-blue-700 font-medium">Return request sent — waiting for staff confirmation</span>
+                          </div>
+                        )}
+
                         {/* Open eBook button — only if approved, has URL, and due date not passed */}
                         {req.type === 'ebook_access' && req.status === 'approved' && (() => {
                           const due = req.due_date ? new Date(req.due_date) : null;
@@ -236,6 +290,16 @@ export default function MyRequestsPage() {
                           }
                           return <p className="text-xs text-slate-400 mt-1">eBook link not available yet</p>;
                         })()}
+
+                        {/* Return Book button */}
+                        {canReturn && (
+                          <button
+                            onClick={() => setReturnConfirm({ isOpen: true, id: req.id, title: book?.title || 'this book' })}
+                            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold rounded-lg transition-colors"
+                          >
+                            <RotateCcw size={11} /> Return Book
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex flex-col items-end gap-2 shrink-0">
@@ -280,6 +344,27 @@ export default function MyRequestsPage() {
               className="flex-1 rounded-xl bg-red-500 hover:bg-red-600"
             >
               Cancel Request
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Return Book confirm dialog */}
+      <AlertDialog open={returnConfirm.isOpen} onOpenChange={(o) => !o && setReturnConfirm({ isOpen: false, id: null, title: '' })}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Return "{returnConfirm.title}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will notify the library staff that you are returning this book. Please bring the book to the library counter. Staff will confirm the return once they receive it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-3">
+            <AlertDialogCancel className="flex-1 rounded-xl">Not yet</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => requestReturn(returnConfirm.id)}
+              className="flex-1 rounded-xl bg-slate-700 hover:bg-slate-800"
+            >
+              Yes, Return Book
             </AlertDialogAction>
           </div>
         </AlertDialogContent>
