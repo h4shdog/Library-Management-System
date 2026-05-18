@@ -6,10 +6,12 @@
 //          request (or staff/admin) can access the file.
 // ============================================================
 import { createServerClient } from '@supabase/ssr';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
-function createClient() {
+// Auth client — uses anon key + cookies to verify the session
+function createAuthClient() {
   const cookieStore = cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -22,10 +24,20 @@ function createClient() {
   );
 }
 
-export async function GET(request, { params }) {
-  const supabase = createClient();
+// Admin client — uses service role key for storage signed URL generation
+// NEVER expose this client or its key to the browser
+function createServiceClient() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { persistSession: false } }
+  );
+}
 
-  // 1. Verify the user is authenticated
+export async function GET(request, { params }) {
+  const supabase = createAuthClient();
+
+  // 1. Verify the user is authenticated via their session cookie
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -33,7 +45,7 @@ export async function GET(request, { params }) {
 
   const bookId = params.id;
 
-  // 2. Fetch the book's storage path and legacy URL (never sent to client)
+  // 2. Fetch the book's storage path (never sent to client)
   const { data: book, error: bookError } = await supabase
     .from('books')
     .select('ebook_path, ebook_url, book_type')
@@ -72,28 +84,26 @@ export async function GET(request, { params }) {
       return NextResponse.json({ error: 'Access not approved' }, { status: 403 });
     }
 
-    // Check expiry
     if (accessRequest.due_date && new Date(accessRequest.due_date) < new Date()) {
       return NextResponse.json({ error: 'eBook access has expired' }, { status: 403 });
     }
   }
 
-  // 4. Serve the file:
-  //    - If uploaded to Supabase Storage → generate a 1-hour signed URL
-  //    - If legacy ebook_url exists (old Google/external link) → return it directly
-  //      (migrate these books by re-uploading the PDF via the admin panel)
+  // 4. Generate signed URL using the service role client (has storage admin rights)
   if (book.ebook_path) {
-    const { data: signed, error: signError } = await supabase.storage
+    const adminClient = createServiceClient();
+    const { data: signed, error: signError } = await adminClient.storage
       .from('ebooks')
       .createSignedUrl(book.ebook_path, 3600); // 1 hour
 
     if (signError || !signed?.signedUrl) {
+      console.error('Signed URL error:', signError);
       return NextResponse.json({ error: 'Could not generate access link' }, { status: 500 });
     }
 
     return NextResponse.json({ url: signed.signedUrl });
   }
 
-  // Legacy fallback — book still has an external URL, not yet migrated
+  // Legacy fallback — book still has an external URL, not yet migrated to storage
   return NextResponse.json({ url: book.ebook_url });
 }
