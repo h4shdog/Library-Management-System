@@ -299,7 +299,7 @@ export function AuthProvider({ children }) {
       publisher:        updatedBook.publisher,
       tags:             updatedBook.tags || [],
       isbn:             updatedBook.isbn,
-      ebook_url:        null,
+      ebook_url:        updatedBook.ebookPath ? null : (updatedBook.ebookUrl || null),
       ebook_path:       updatedBook.ebookPath || null,
     }).eq('id', updatedBook.id);
     if (error) throw new Error(error.message);
