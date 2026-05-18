@@ -17,7 +17,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
-const FINE_PER_DAY = 5; // ₱5 per day
+const FINE_PER_DAY = 5; // fallback — overridden by library_settings
 
 const statusStyle = {
   pending:   { card: 'border-amber-100 bg-amber-50',     dot: 'bg-amber-400' },
@@ -30,6 +30,13 @@ export default function MyRequestsPage() {
   const { user, allBooks } = useAuth();
   const [requests, setRequests] = useState([]);
   const [confirm, setConfirm]   = useState({ isOpen: false, id: null, title: '' });
+  const [fineRate, setFineRate] = useState(FINE_PER_DAY);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.from('library_settings').select('value').eq('key', 'daily_fine').single()
+      .then(({ data }) => { if (data?.value != null) setFineRate(Number(data.value)); });
+  }, []);
 
   const getBook = (bookId) => allBooks.find((b) => b.id === bookId);
 
@@ -61,7 +68,7 @@ export default function MyRequestsPage() {
     const due  = new Date(req.due_date);
     const now  = new Date();
     const days = Math.floor((now - due) / 86400000);
-    return days > 0 ? days * FINE_PER_DAY : 0;
+    return days > 0 ? days * fineRate : 0;
   };
 
   const totalUnpaidFine = requests.reduce((sum, r) => {

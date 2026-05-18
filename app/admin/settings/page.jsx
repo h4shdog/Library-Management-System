@@ -22,22 +22,24 @@ const DEFAULT_HOURS = {
 export default function AdminSettingsPage() {
   const [hours, setHours]           = useState(DEFAULT_HOURS);
   const [hoursSaving, setHoursSaving] = useState(false);
-  const [hoursStatus, setHoursStatus] = useState(null); // 'success' | 'error'
+  const [hoursStatus, setHoursStatus] = useState(null);
   const [hoursLoading, setHoursLoading] = useState(true);
+  const [dailyFine, setDailyFine]   = useState('0.50');
+  const [fineSaving, setFineSaving] = useState(false);
+  const [fineStatus, setFineStatus] = useState(null);
 
   // Load saved hours from Supabase on mount
   useEffect(() => {
-    async function fetchHours() {
+    async function fetchSettings() {
       setHoursLoading(true);
-      const { data, error } = await supabase
+      const { data: hoursData } = await supabase
         .from('library_settings')
         .select('value')
         .eq('key', 'library_hours')
         .single();
 
-      if (!error && data?.value) {
-        const saved = data.value;
-        // Migrate old array format (7 individual days) → new grouped format
+      if (hoursData?.value) {
+        const saved = hoursData.value;
         if (Array.isArray(saved)) {
           const weekday = saved.find((d) => d.day === 'Monday') || {};
           const weekend = saved.find((d) => d.day === 'Saturday') || {};
@@ -49,14 +51,42 @@ export default function AdminSettingsPage() {
           setHours(saved);
         }
       }
+
+      const { data: fineData } = await supabase
+        .from('library_settings')
+        .select('value')
+        .eq('key', 'daily_fine')
+        .single();
+
+      if (fineData?.value !== undefined && fineData?.value !== null) {
+        setDailyFine(String(fineData.value));
+      }
+
       setHoursLoading(false);
     }
-    fetchHours();
+    fetchSettings();
   }, []);
 
   const updateGroup = (group, field, value) => {
     setHours((prev) => ({ ...prev, [group]: { ...prev[group], [field]: value } }));
     setHoursStatus(null);
+  };
+
+  const saveFine = async () => {
+    setFineSaving(true);
+    setFineStatus(null);
+    try {
+      const { error } = await supabase
+        .from('library_settings')
+        .upsert({ key: 'daily_fine', value: parseFloat(dailyFine) || 0 }, { onConflict: 'key' });
+      if (error) throw error;
+      setFineStatus('success');
+    } catch {
+      setFineStatus('error');
+    } finally {
+      setFineSaving(false);
+      setTimeout(() => setFineStatus(null), 3000);
+    }
   };
 
   const saveHours = async () => {
@@ -135,7 +165,7 @@ export default function AdminSettingsPage() {
             <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">Max Books/User</label>
-                <Input type="number" defaultValue="5" className="border-slate-200 focus:ring-[#cbb0f8]" />
+                <Input type="number" defaultValue="1" className="border-slate-200 focus:ring-[#cbb0f8]" />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">Loan Period (Days)</label>
@@ -146,8 +176,27 @@ export default function AdminSettingsPage() {
                 <Input type="number" defaultValue="2" className="border-slate-200 focus:ring-[#cbb0f8]" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">Daily Fine ($)</label>
-                <Input type="number" step="0.1" defaultValue="0.50" className="border-slate-200 focus:ring-[#cbb0f8]" />
+                <label className="text-sm font-bold text-slate-700">Daily Fine (₱)</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    step="0.50"
+                    min="0"
+                    value={dailyFine}
+                    onChange={(e) => { setDailyFine(e.target.value); setFineStatus(null); }}
+                    className="border-slate-200 focus:ring-[#cbb0f8]"
+                  />
+                  <Button
+                    onClick={saveFine}
+                    disabled={fineSaving}
+                    className="bg-[#7C3AED] hover:bg-[#b594f0] text-white font-bold px-3 rounded-xl shrink-0"
+                  >
+                    {fineSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  </Button>
+                </div>
+                {fineStatus === 'success' && <p className="text-xs text-emerald-600 font-semibold">Saved ✓</p>}
+                {fineStatus === 'error'   && <p className="text-xs text-red-500 font-semibold">Failed to save</p>}
+                <p className="text-xs text-slate-400">Applied per day overdue on physical books</p>
               </div>
             </div>
           </Card>

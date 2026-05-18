@@ -13,19 +13,20 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { useState, useEffect, useRef } from 'react';
 import { CheckCircle, XCircle, Clock, AlertTriangle, PhilippinePeso } from 'lucide-react';
 
-const FINE_PER_DAY = 5; // ₱5 per day overdue
+const FINE_PER_DAY = 5; // ₱5 per day overdue — overridden by library_settings
 
-function calcFine(dueDate) {
+function calcFine(dueDate, fineRate = FINE_PER_DAY) {
   if (!dueDate) return 0;
   const days = Math.floor((new Date() - new Date(dueDate)) / 86400000);
-  return days > 0 ? days * FINE_PER_DAY : 0;
+  return days > 0 ? days * fineRate : 0;
 }
 
 export default function StaffRequestsPage() {
   const { allBooks, loadAllBooks } = useAuth();
   const [requests, setRequests]   = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('requests'); // 'requests' | 'fines'
+  const [activeTab, setActiveTab] = useState('requests');
+  const [fineRate, setFineRate]   = useState(FINE_PER_DAY);
   const channelRef = useRef(null);
 
   const getBook = (bookId) => allBooks.find((b) => b.id === bookId);
@@ -33,6 +34,10 @@ export default function StaffRequestsPage() {
   // ── Fetch + real-time ────────────────────────────────────────
   useEffect(() => {
     const supabase = createClient();
+
+    // Load fine rate from settings
+    supabase.from('library_settings').select('value').eq('key', 'daily_fine').single()
+      .then(({ data }) => { if (data?.value != null) setFineRate(Number(data.value)); });
 
     const fetchRequests = async () => {
       setIsLoading(true);
@@ -141,7 +146,7 @@ export default function StaffRequestsPage() {
     const isEbook   = req?.type === 'ebook_access';
 
     // Calculate fine for overdue physical books
-    const fine = isEbook ? 0 : calcFine(req?.due_date);
+    const fine = isEbook ? 0 : calcFine(req?.due_date, fineRate);
 
     const { error } = await supabase
       .from('requests')
@@ -317,7 +322,7 @@ export default function StaffRequestsPage() {
                 const book     = getBook(req.book_id);
                 const isOverdue = req.due_date && new Date(req.due_date) < new Date();
                 const isEbook  = req.type === 'ebook_access';
-                const fine     = isEbook ? 0 : calcFine(req.due_date);
+                const fine     = isEbook ? 0 : calcFine(req.due_date, fineRate);
                 return (
                   <Card key={req.id} className={`border p-5 rounded-2xl ${isOverdue ? 'border-red-200 bg-red-50' : 'border-emerald-100 bg-emerald-50'}`}>
                     <div className="flex items-start gap-4">
