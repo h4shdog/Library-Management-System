@@ -8,9 +8,8 @@ import { useAuth } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { Calendar, X, ExternalLink } from 'lucide-react';
+import { Calendar, X, ExternalLink, AlertTriangle } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -18,17 +17,19 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+const FINE_PER_DAY = 5; // ₱5 per day
+
 const statusStyle = {
-  pending:   { card: 'border-amber-100 bg-amber-50',   dot: 'bg-amber-400' },
+  pending:   { card: 'border-amber-100 bg-amber-50',     dot: 'bg-amber-400' },
   approved:  { card: 'border-emerald-100 bg-emerald-50', dot: 'bg-emerald-500' },
-  completed: { card: 'border-slate-100 bg-slate-50',   dot: 'bg-slate-400' },
-  rejected:  { card: 'border-red-100 bg-red-50',       dot: 'bg-red-400' },
+  completed: { card: 'border-slate-100 bg-slate-50',     dot: 'bg-slate-400' },
+  rejected:  { card: 'border-red-100 bg-red-50',         dot: 'bg-red-400' },
 };
 
 export default function MyRequestsPage() {
   const { user, allBooks } = useAuth();
   const [requests, setRequests] = useState([]);
-  const [confirm, setConfirm] = useState({ isOpen: false, id: null, title: '' });
+  const [confirm, setConfirm]   = useState({ isOpen: false, id: null, title: '' });
 
   const getBook = (bookId) => allBooks.find((b) => b.id === bookId);
 
@@ -53,6 +54,21 @@ export default function MyRequestsPage() {
     setConfirm({ isOpen: false, id: null, title: '' });
   };
 
+  // Compute fine for a request
+  const computeFine = (req) => {
+    if (!req.due_date || req.type === 'ebook_access') return 0;
+    if (req.fine_paid) return 0;
+    const due  = new Date(req.due_date);
+    const now  = new Date();
+    const days = Math.floor((now - due) / 86400000);
+    return days > 0 ? days * FINE_PER_DAY : 0;
+  };
+
+  const totalUnpaidFine = requests.reduce((sum, r) => {
+    if (r.fine_paid) return sum;
+    return sum + (r.fine_amount || computeFine(r));
+  }, 0);
+
   const groups = {
     pending:   requests.filter((r) => r.status === 'pending'),
     approved:  requests.filter((r) => r.status === 'approved'),
@@ -74,6 +90,19 @@ export default function MyRequestsPage() {
         <h1 className="text-2xl font-bold text-slate-900">My Requests</h1>
         <p className="text-sm text-slate-500 mt-1">Manage your borrowing and reservation requests</p>
       </div>
+
+      {/* Unpaid fine banner */}
+      {totalUnpaidFine > 0 && (
+        <Card className="border-red-200 bg-red-50 p-4 flex items-start gap-3">
+          <AlertTriangle size={18} className="text-red-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-bold text-red-700">Outstanding Fine: ₱{totalUnpaidFine.toFixed(2)}</p>
+            <p className="text-xs text-red-600 mt-0.5">
+              You have an unpaid fine. Please settle your payment at the library counter. You cannot borrow or reserve books until this is cleared.
+            </p>
+          </div>
+        </Card>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3">
@@ -99,10 +128,15 @@ export default function MyRequestsPage() {
             </div>
             <div className="space-y-2">
               {items.map((req) => {
-                const book = getBook(req.book_id);
-                const daysLeft = req.due_date ? Math.ceil((new Date(req.due_date) - Date.now()) / 86400000) : null;
+                const book     = getBook(req.book_id);
+                const fine     = req.fine_amount || computeFine(req);
+                const isOverdue = req.due_date && new Date(req.due_date) < new Date() && req.status === 'approved';
+                const daysLeft  = req.due_date && req.status === 'approved'
+                  ? Math.ceil((new Date(req.due_date) - Date.now()) / 86400000)
+                  : null;
+
                 return (
-                  <Card key={req.id} className={`border ${style.card} p-4 rounded-2xl`}>
+                  <Card key={req.id} className={`border ${isOverdue ? 'border-red-200 bg-red-50' : style.card} p-4 rounded-2xl`}>
                     <div className="flex items-start gap-3">
                       {book && (
                         <img
@@ -115,21 +149,47 @@ export default function MyRequestsPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-slate-900 truncate">{book?.title || 'Unknown Book'}</p>
                         <p className="text-xs text-slate-400">{book?.author}</p>
-                        <div className="flex items-center gap-3 mt-2">
+
+                        <div className="flex flex-wrap items-center gap-2 mt-2">
                           <div className="flex items-center gap-1 text-xs text-slate-400">
                             <Calendar size={11} />
                             {new Date(req.request_date || req.created_at).toLocaleDateString()}
                           </div>
-                          {daysLeft !== null && (
-                            <span className={`text-xs font-medium ${daysLeft <= 3 ? 'text-red-500' : 'text-slate-500'}`}>
-                              {daysLeft > 0 ? `${daysLeft}d left` : 'Due today'}
+
+                          {/* Due date — only show if approved and not overdue */}
+                          {daysLeft !== null && daysLeft > 0 && (
+                            <span className={`text-xs font-medium ${daysLeft <= 3 ? 'text-amber-600' : 'text-slate-500'}`}>
+                              Due in {daysLeft}d
                             </span>
                           )}
+
+                          {/* Overdue */}
+                          {isOverdue && (
+                            <span className="text-xs font-bold text-red-600">
+                              OVERDUE
+                            </span>
+                          )}
+
                           <Badge className="text-[10px] capitalize bg-white border border-slate-200 text-slate-500 px-1.5 py-0">
                             {req.type === 'ebook_access' ? 'eBook' : req.type}
                           </Badge>
                         </div>
-                        {/* Open eBook button for approved ebook access */}
+
+                        {/* Fine display */}
+                        {fine > 0 && !req.fine_paid && (
+                          <div className="mt-2 flex items-center gap-1.5 px-2.5 py-1.5 bg-red-100 border border-red-200 rounded-lg w-fit">
+                            <AlertTriangle size={11} className="text-red-500" />
+                            <span className="text-xs font-bold text-red-700">Fine: ₱{fine.toFixed(2)}</span>
+                            <span className="text-[10px] text-red-500">— settle at library counter</span>
+                          </div>
+                        )}
+                        {fine > 0 && req.fine_paid && (
+                          <div className="mt-2 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg w-fit">
+                            <span className="text-xs font-semibold text-emerald-700">Fine paid ✓</span>
+                          </div>
+                        )}
+
+                        {/* Open eBook button */}
                         {req.type === 'ebook_access' && req.status === 'approved' && book?.ebookUrl && (
                           <a
                             href={book.ebookUrl}
@@ -144,11 +204,12 @@ export default function MyRequestsPage() {
                           <p className="text-xs text-slate-400 mt-1">eBook link not available yet</p>
                         )}
                       </div>
+
                       <div className="flex flex-col items-end gap-2 shrink-0">
                         <StatusBadge status={req.status} />
                         {status === 'pending' && (
                           <button
-                          onClick={() => setConfirm({ isOpen: true, id: req.id, title: book?.title || 'this book' })}
+                            onClick={() => setConfirm({ isOpen: true, id: req.id, title: book?.title || 'this book' })}
                             className="p-1 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors"
                           >
                             <X size={14} />
@@ -182,7 +243,7 @@ export default function MyRequestsPage() {
           <div className="flex gap-3">
             <AlertDialogCancel className="flex-1 rounded-xl">Keep</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => { cancelRequest(confirm.id); }}
+              onClick={() => cancelRequest(confirm.id)}
               className="flex-1 rounded-xl bg-red-500 hover:bg-red-600"
             >
               Cancel Request
