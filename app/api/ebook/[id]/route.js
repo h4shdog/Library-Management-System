@@ -40,7 +40,7 @@ export async function GET(request, { params }) {
   // 1. Verify the user is authenticated via their session cookie
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'DEBUG: Unauthorized', detail: authError?.message }, { status: 401 });
   }
 
   const bookId = params.id;
@@ -53,11 +53,11 @@ export async function GET(request, { params }) {
     .single();
 
   if (bookError || !book) {
-    return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    return NextResponse.json({ error: 'DEBUG: Book not found', detail: bookError?.message }, { status: 404 });
   }
 
   if (book.book_type !== 'ebook' || (!book.ebook_path && !book.ebook_url)) {
-    return NextResponse.json({ error: 'No eBook available for this book' }, { status: 404 });
+    return NextResponse.json({ error: `DEBUG: No ebook. path=${book.ebook_path} url=${book.ebook_url} type=${book.book_type}` }, { status: 404 });
   }
 
   // 3. Check access: staff/admin bypass; students need an approved, non-expired request
@@ -70,7 +70,7 @@ export async function GET(request, { params }) {
   const role = profile?.role;
 
   if (role !== 'admin' && role !== 'staff') {
-    const { data: accessRequest } = await supabase
+    const { data: accessRequest, error: reqError } = await supabase
       .from('requests')
       .select('status, due_date')
       .eq('user_id', user.id)
@@ -81,29 +81,33 @@ export async function GET(request, { params }) {
       .single();
 
     if (!accessRequest) {
-      return NextResponse.json({ error: 'Access not approved' }, { status: 403 });
+      return NextResponse.json({ error: `DEBUG: Access not approved`, detail: reqError?.message }, { status: 403 });
     }
 
     if (accessRequest.due_date && new Date(accessRequest.due_date) < new Date()) {
-      return NextResponse.json({ error: 'eBook access has expired' }, { status: 403 });
+      return NextResponse.json({ error: 'DEBUG: eBook access has expired' }, { status: 403 });
     }
   }
 
   // 4. Generate signed URL using the service role client (has storage admin rights)
   if (book.ebook_path) {
+    const serviceKeyPresent = !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceKeyPresent) {
+      return NextResponse.json({ error: 'DEBUG: SUPABASE_SERVICE_ROLE_KEY is not set' }, { status: 500 });
+    }
+
     const adminClient = createServiceClient();
     const { data: signed, error: signError } = await adminClient.storage
       .from('ebooks')
-      .createSignedUrl(book.ebook_path, 3600); // 1 hour
+      .createSignedUrl(book.ebook_path, 3600);
 
     if (signError || !signed?.signedUrl) {
-      console.error('Signed URL error:', signError);
-      return NextResponse.json({ error: 'Could not generate access link' }, { status: 500 });
+      return NextResponse.json({ error: `DEBUG: Signed URL failed: ${signError?.message}`, path: book.ebook_path }, { status: 500 });
     }
 
     return NextResponse.json({ url: signed.signedUrl });
   }
 
-  // Legacy fallback — book still has an external URL, not yet migrated to storage
+  // Legacy fallback
   return NextResponse.json({ url: book.ebook_url });
 }

@@ -25,8 +25,8 @@ function OpenEbookButton({ bookId }) {
       } else {
         alert(data.error || 'Could not open eBook. Please try again.');
       }
-    } catch {
-      alert('Could not open eBook. Please try again.');
+    } catch (err) {
+      alert('Network error: ' + err.message);
     } finally {
       setLoading(false);
     }
