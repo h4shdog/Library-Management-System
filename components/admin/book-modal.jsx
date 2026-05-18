@@ -81,6 +81,7 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
     if (!formData.publisher?.trim())       newErrors.publisher       = 'Publisher is required';
     if (!formData.publicationDate?.trim()) newErrors.publicationDate = 'Publication date is required';
     if (!formData.description?.trim())     newErrors.description     = 'Description is required';
+    if (!formData.cover?.trim())           newErrors.cover           = 'Cover image URL is required';
     if (!formData.totalCopies || formData.totalCopies < 1)
                                            newErrors.totalCopies     = 'Total copies must be at least 1';
     if (formData.availability < 0 || formData.availability > formData.totalCopies)
@@ -277,13 +278,14 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
 
           {/* Cover URL */}
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700">Cover Image URL</label>
+            <label className="text-sm font-bold text-slate-700">Cover Image URL *</label>
             <Input
               value={formData.cover ?? ''}
               onChange={(e) => handleChange('cover', e.target.value)}
               placeholder="https://covers.openlibrary.org/..."
-              className={`border-slate-200 ${t.focusRing}`}
+              className={`border-slate-200 ${t.focusRing} ${errors.cover ? 'border-red-500' : ''}`}
             />
+            {errors.cover && <p className="text-xs text-red-500 font-semibold">{errors.cover}</p>}
             {formData.cover && (
               <img
                 src={formData.cover}
