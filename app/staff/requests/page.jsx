@@ -27,6 +27,7 @@ export default function StaffRequestsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('requests');
   const [fineRate, setFineRate]   = useState(FINE_PER_DAY);
+  const [loanDays, setLoanDays]   = useState(14);
   const channelRef = useRef(null);
 
   const getBook = (bookId) => allBooks.find((b) => b.id === bookId);
@@ -35,9 +36,17 @@ export default function StaffRequestsPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    // Load fine rate from settings
-    supabase.from('library_settings').select('value').eq('key', 'daily_fine').single()
-      .then(({ data }) => { if (data?.value != null) setFineRate(Number(data.value)); });
+    // Load borrowing rules from settings
+    supabase.from('library_settings').select('key, value')
+      .in('key', ['borrowing_rules', 'daily_fine'])
+      .then(({ data }) => {
+        if (data) {
+          const map = Object.fromEntries(data.map((r) => [r.key, r.value]));
+          if (map.borrowing_rules?.dailyFine != null) setFineRate(Number(map.borrowing_rules.dailyFine));
+          else if (map.daily_fine != null) setFineRate(Number(map.daily_fine));
+          if (map.borrowing_rules?.loanDays != null) setLoanDays(Number(map.borrowing_rules.loanDays));
+        }
+      });
 
     const fetchRequests = async () => {
       setIsLoading(true);
@@ -80,7 +89,7 @@ export default function StaffRequestsPage() {
     const req     = requests.find((r) => r.id === id);
     const book    = getBook(req?.book_id);
     const isEbook = req?.type === 'ebook_access';
-    const dueDate = isEbook ? null : new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0];
+    const dueDate = isEbook ? null : new Date(Date.now() + loanDays * 86400000).toISOString().split('T')[0];
     const today   = new Date().toISOString().split('T')[0];
 
     const { error } = await supabase

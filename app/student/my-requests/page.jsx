@@ -34,8 +34,15 @@ export default function MyRequestsPage() {
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.from('library_settings').select('value').eq('key', 'daily_fine').single()
-      .then(({ data }) => { if (data?.value != null) setFineRate(Number(data.value)); });
+    supabase.from('library_settings').select('value').eq('key', 'borrowing_rules').single()
+      .then(({ data }) => {
+        if (data?.value?.dailyFine != null) setFineRate(Number(data.value.dailyFine));
+        else {
+          // fallback to old daily_fine key
+          supabase.from('library_settings').select('value').eq('key', 'daily_fine').single()
+            .then(({ data: d }) => { if (d?.value != null) setFineRate(Number(d.value)); });
+        }
+      });
   }, []);
 
   const getBook = (bookId) => allBooks.find((b) => b.id === bookId);
@@ -136,7 +143,7 @@ export default function MyRequestsPage() {
             <div className="space-y-2">
               {items.map((req) => {
                 const book     = getBook(req.book_id);
-                const fine     = req.fine_amount || computeFine(req);
+                const fine     = req.fine_amount > 0 ? req.fine_amount : (req.status === 'approved' ? computeFine(req) : 0);
                 const isOverdue = req.due_date && new Date(req.due_date) < new Date() && req.status === 'approved';
                 const daysLeft  = req.due_date && req.status === 'approved'
                   ? Math.ceil((new Date(req.due_date) - Date.now()) / 86400000)

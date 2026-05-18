@@ -23,8 +23,16 @@ export default function BookDetailsPage() {
   const [isLoading, setIsLoading]             = useState(false);
   const [userHasRequest, setUserHasRequest]   = useState(false);
   const [userApprovedEbook, setUserApprovedEbook] = useState(false);
-  const [blockReason, setBlockReason]         = useState(null); // null | 'fine' | 'limit'
+  const [blockReason, setBlockReason]         = useState(null);
   const [unpaidFine, setUnpaidFine]           = useState(0);
+  const [maxBooks, setMaxBooks]               = useState(1);
+
+  // Load borrowing rules
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.from('library_settings').select('value').eq('key', 'borrowing_rules').single()
+      .then(({ data }) => { if (data?.value?.maxBooks != null) setMaxBooks(Number(data.value.maxBooks)); });
+  }, []);
 
   useEffect(() => {
     if (!user || !bookId) return;
@@ -59,21 +67,21 @@ export default function BookDetailsPage() {
       setUnpaidFine(totalFine);
       if (totalFine > 0) { setBlockReason('fine'); return; }
 
-      // 3. Check borrowing limit (max 1 active borrow/reserve at a time)
+      // 3. Check borrowing limit from settings
       const { data: activeReqs } = await supabase
         .from('requests')
         .select('id')
         .eq('user_id', user.id)
         .in('status', ['pending', 'approved'])
-        .neq('type', 'ebook_access'); // ebooks don't count toward physical limit
+        .neq('type', 'ebook_access');
 
-      if ((activeReqs || []).length >= 1 && book?.bookType !== 'ebook') {
+      if ((activeReqs || []).length >= maxBooks && book?.bookType !== 'ebook') {
         setBlockReason('limit');
       }
     };
 
     checkEligibility();
-  }, [user?.id, bookId, book?.bookType]);
+  }, [user?.id, bookId, book?.bookType, maxBooks]);
 
   if (!book) {
     return (
