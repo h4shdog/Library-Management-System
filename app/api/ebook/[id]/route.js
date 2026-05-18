@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET(request, { params }) {
   try {
-    const bookId = params.id;
+    const { id: bookId } = await params;
 
     // Get the auth token from the Authorization header
     const authHeader = request.headers.get('authorization');
