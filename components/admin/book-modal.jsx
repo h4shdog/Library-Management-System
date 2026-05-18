@@ -75,8 +75,18 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.title?.trim())  newErrors.title  = 'Title is required';
-    if (!formData.author?.trim()) newErrors.author = 'Author is required';
+    if (!formData.title?.trim())           newErrors.title           = 'Title is required';
+    if (!formData.author?.trim())          newErrors.author          = 'Author is required';
+    if (!formData.isbn?.trim())            newErrors.isbn            = 'ISBN is required';
+    if (!formData.publisher?.trim())       newErrors.publisher       = 'Publisher is required';
+    if (!formData.publicationDate?.trim()) newErrors.publicationDate = 'Publication date is required';
+    if (!formData.description?.trim())     newErrors.description     = 'Description is required';
+    if (!formData.totalCopies || formData.totalCopies < 1)
+                                           newErrors.totalCopies     = 'Total copies must be at least 1';
+    if (formData.availability < 0 || formData.availability > formData.totalCopies)
+                                           newErrors.availability    = 'Available copies cannot exceed total copies';
+    if (formData.bookType === 'ebook' && !formData.ebookUrl?.trim())
+                                           newErrors.ebookUrl        = 'eBook URL is required for eBook type';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -111,6 +121,16 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
 
         {/* Form Body */}
         <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+
+          {/* Validation summary */}
+          {Object.keys(errors).length > 0 && (
+            <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 border border-red-200">
+              <span className="text-red-500 font-bold text-sm shrink-0">!</span>
+              <p className="text-xs text-red-600 font-semibold">
+                Please fill in all required fields before saving.
+              </p>
+            </div>
+          )}
 
           {/* Title */}
           <div className="space-y-1.5">
@@ -168,35 +188,38 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
               {errors.author && <p className="text-xs text-red-500 font-semibold">{errors.author}</p>}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">ISBN</label>
+              <label className="text-sm font-bold text-slate-700">ISBN *</label>
               <Input
                 value={formData.isbn ?? ''}
                 onChange={(e) => handleChange('isbn', e.target.value)}
                 placeholder="e.g. 978-0451524935"
-                className={`border-slate-200 ${t.focusRing}`}
+                className={`border-slate-200 ${t.focusRing} ${errors.isbn ? 'border-red-500' : ''}`}
               />
+              {errors.isbn && <p className="text-xs text-red-500 font-semibold">{errors.isbn}</p>}
             </div>
           </div>
 
           {/* Publisher + Date */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">Publisher</label>
+              <label className="text-sm font-bold text-slate-700">Publisher *</label>
               <Input
                 value={formData.publisher ?? ''}
                 onChange={(e) => handleChange('publisher', e.target.value)}
                 placeholder="e.g. Penguin Books"
-                className={`border-slate-200 ${t.focusRing}`}
+                className={`border-slate-200 ${t.focusRing} ${errors.publisher ? 'border-red-500' : ''}`}
               />
+              {errors.publisher && <p className="text-xs text-red-500 font-semibold">{errors.publisher}</p>}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">Publication Date</label>
+              <label className="text-sm font-bold text-slate-700">Publication Date *</label>
               <Input
                 type="date"
                 value={formData.publicationDate ?? ''}
                 onChange={(e) => handleChange('publicationDate', e.target.value)}
-                className={`border-slate-200 ${t.focusRing}`}
+                className={`border-slate-200 ${t.focusRing} ${errors.publicationDate ? 'border-red-500' : ''}`}
               />
+              {errors.publicationDate && <p className="text-xs text-red-500 font-semibold">{errors.publicationDate}</p>}
             </div>
           </div>
 
@@ -217,34 +240,39 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
           {/* Available + Total Copies */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">Available</label>
+              <label className="text-sm font-bold text-slate-700">Available *</label>
               <Input
                 type="number"
+                min="0"
                 value={formData.availability ?? 0}
                 onChange={(e) => handleChange('availability', parseInt(e.target.value) || 0)}
-                className={`border-slate-200 ${t.focusRing}`}
+                className={`border-slate-200 ${t.focusRing} ${errors.availability ? 'border-red-500' : ''}`}
               />
+              {errors.availability && <p className="text-xs text-red-500 font-semibold">{errors.availability}</p>}
             </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">Total Copies</label>
+              <label className="text-sm font-bold text-slate-700">Total Copies *</label>
               <Input
                 type="number"
+                min="1"
                 value={formData.totalCopies ?? 0}
                 onChange={(e) => handleChange('totalCopies', parseInt(e.target.value) || 0)}
-                className={`border-slate-200 ${t.focusRing}`}
+                className={`border-slate-200 ${t.focusRing} ${errors.totalCopies ? 'border-red-500' : ''}`}
               />
+              {errors.totalCopies && <p className="text-xs text-red-500 font-semibold">{errors.totalCopies}</p>}
             </div>
           </div>
 
           {/* Description */}
           <div className="space-y-1.5">
-            <label className="text-sm font-bold text-slate-700">Description</label>
+            <label className="text-sm font-bold text-slate-700">Description *</label>
             <textarea
               value={formData.description ?? ''}
               onChange={(e) => handleChange('description', e.target.value)}
               placeholder="Brief description of the book..."
-              className={`w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white text-slate-900 font-medium min-h-[80px] focus:ring-2 ${t.selectRing} outline-none resize-none`}
+              className={`w-full px-3 py-2 border rounded-lg text-sm bg-white text-slate-900 font-medium min-h-[80px] focus:ring-2 ${t.selectRing} outline-none resize-none ${errors.description ? 'border-red-500' : 'border-slate-200'}`}
             />
+            {errors.description && <p className="text-xs text-red-500 font-semibold">{errors.description}</p>}
           </div>
 
           {/* Cover URL */}
@@ -269,14 +297,17 @@ export function BookModal({ isOpen, book, onClose, onSave, theme = 'admin' }) {
           {/* eBook URL — only shown for ebook type */}
           {formData.bookType === 'ebook' && (
             <div className="space-y-1.5">
-              <label className="text-sm font-bold text-slate-700">eBook URL</label>
+              <label className="text-sm font-bold text-slate-700">eBook URL *</label>
               <Input
                 value={formData.ebookUrl ?? ''}
                 onChange={(e) => handleChange('ebookUrl', e.target.value)}
                 placeholder="https://drive.google.com/... or any accessible link"
-                className={`border-slate-200 ${t.focusRing}`}
+                className={`border-slate-200 ${t.focusRing} ${errors.ebookUrl ? 'border-red-500' : ''}`}
               />
-              <p className="text-xs text-slate-400">Students will be redirected here after access is approved.</p>
+              {errors.ebookUrl
+                ? <p className="text-xs text-red-500 font-semibold">{errors.ebookUrl}</p>
+                : <p className="text-xs text-slate-400">Students will be redirected here after access is approved.</p>
+              }
             </div>
           )}
         </div>
