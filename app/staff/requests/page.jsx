@@ -89,7 +89,8 @@ export default function StaffRequestsPage() {
     const req     = requests.find((r) => r.id === id);
     const book    = getBook(req?.book_id);
     const isEbook = req?.type === 'ebook_access';
-    const dueDate = isEbook ? null : new Date(Date.now() + loanDays * 86400000).toISOString().split('T')[0];
+    // Both physical books and ebooks get a due date based on loanDays
+    const dueDate = new Date(Date.now() + loanDays * 86400000).toISOString().split('T')[0];
     const today   = new Date().toISOString().split('T')[0];
 
     const { error } = await supabase
@@ -105,7 +106,7 @@ export default function StaffRequestsPage() {
 
     if (req?.user_id) {
       const message = isEbook
-        ? `Your eBook access request for "${book?.title || 'a book'}" has been approved. You can now open it from your requests page.`
+        ? `Your eBook access request for "${book?.title || 'a book'}" has been approved. You can read it until ${new Date(dueDate).toLocaleDateString()}.`
         : `Your ${req.type} request for "${book?.title || 'a book'}" has been approved. Please pick it up by ${new Date(dueDate).toLocaleDateString()}.`;
       await supabase.from('notifications').insert({ user_id: req.user_id, title: 'Request Approved', message, type: 'success', read: false });
     }
@@ -408,7 +409,14 @@ export default function StaffRequestsPage() {
                         </p>
                         <div className="flex items-center gap-3 mt-2 text-xs">
                           {isEbook ? (
-                            <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0">eBook Access</Badge>
+                            <span className={isOverdue ? 'text-red-600 font-bold' : 'text-blue-600'}>
+                              <Badge className="text-[10px] bg-blue-100 text-blue-700 border-0 mr-1">eBook Access</Badge>
+                              {req.due_date
+                                ? isOverdue
+                                  ? `Expired ${new Date(req.due_date).toLocaleDateString()}`
+                                  : `Access until ${new Date(req.due_date).toLocaleDateString()}`
+                                : 'No expiry set'}
+                            </span>
                           ) : (
                             <span className={isOverdue ? 'text-red-600 font-bold' : 'text-slate-500'}>
                               Due: {req.due_date ? new Date(req.due_date).toLocaleDateString() : 'N/A'}

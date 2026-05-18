@@ -185,7 +185,7 @@ export default function MyRequestsPage() {
             <div className="space-y-2">
               {items.map((req) => {
                 const book     = getBook(req.book_id);
-                const fine     = req.fine_amount > 0 ? req.fine_amount : (req.status === 'approved' ? computeFine(req) : 0);
+                const fine      = req.fine_amount > 0 ? req.fine_amount : (req.status === 'approved' && req.type !== 'ebook_access' ? computeFine(req) : 0);
                 const isOverdue = req.due_date && new Date(req.due_date) < new Date() && req.status === 'approved';
                 const daysLeft  = req.due_date && req.status === 'approved'
                   ? Math.ceil((new Date(req.due_date) - Date.now()) / 86400000)
@@ -216,17 +216,17 @@ export default function MyRequestsPage() {
                             {new Date(req.request_date || req.created_at).toLocaleDateString()}
                           </div>
 
-                          {/* Due date — only show if approved and not overdue */}
+                          {/* Due date countdown — physical and ebook */}
                           {daysLeft !== null && daysLeft > 0 && (
                             <span className={`text-xs font-medium ${daysLeft <= 3 ? 'text-amber-600' : 'text-slate-500'}`}>
-                              Due in {daysLeft}d
+                              {req.type === 'ebook_access' ? `Access expires in ${daysLeft}d` : `Due in ${daysLeft}d`}
                             </span>
                           )}
 
-                          {/* Overdue */}
+                          {/* Overdue / expired */}
                           {isOverdue && (
                             <span className="text-xs font-bold text-red-600">
-                              OVERDUE
+                              {req.type === 'ebook_access' ? 'EXPIRED' : 'OVERDUE'}
                             </span>
                           )}
 

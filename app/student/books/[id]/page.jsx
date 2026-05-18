@@ -50,15 +50,20 @@ export default function BookDetailsPage() {
         .limit(1);
 
       if (existing && existing.length > 0) {
-        setUserHasRequest(true);
-        if (existing[0].type === 'ebook_access' && existing[0].status === 'approved') {
-          // Check if due date has passed — if so, access is revoked
-          const due = existing[0].due_date ? new Date(existing[0].due_date) : null;
+        const ebookReq = existing[0];
+        if (ebookReq.type === 'ebook_access' && ebookReq.status === 'approved') {
+          const due = ebookReq.due_date ? new Date(ebookReq.due_date) : null;
           const isExpired = due && due < new Date();
-          if (!isExpired) {
+          if (isExpired) {
+            // Access expired — don't block a new request
+            setUserHasRequest(false);
+          } else {
+            setUserHasRequest(true);
             setUserApprovedEbook(true);
             setEbookDueDate(due);
           }
+        } else {
+          setUserHasRequest(true);
         }
       }
 
