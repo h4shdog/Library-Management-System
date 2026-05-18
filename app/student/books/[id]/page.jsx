@@ -241,7 +241,14 @@ export default function BookDetailsPage() {
                             onClick={async () => {
                               setIsLoadingEbook(true);
                               try {
-                                const res = await fetch(`/api/ebook/${book.id}`);
+                                const { createClient } = await import('@/lib/supabase');
+                                const supabase = createClient();
+                                const { data: { session } } = await supabase.auth.getSession();
+                                const token = session?.access_token;
+
+                                const res = await fetch(`/api/ebook/${book.id}`, {
+                                  headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+                                });
                                 const data = await res.json();
                                 if (data.url) {
                                   setEbookSignedUrl(data.url);
@@ -249,8 +256,8 @@ export default function BookDetailsPage() {
                                 } else {
                                   alert(data.error || 'Could not open eBook. Please try again.');
                                 }
-                              } catch {
-                                alert('Could not open eBook. Please try again.');
+                              } catch (err) {
+                                alert('Network error: ' + err.message);
                               } finally {
                                 setIsLoadingEbook(false);
                               }

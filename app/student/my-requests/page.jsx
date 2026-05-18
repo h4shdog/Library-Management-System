@@ -18,7 +18,15 @@ function OpenEbookButton({ bookId }) {
   const handleOpen = async () => {
     setLoading(true);
     try {
-      const res  = await fetch(`/api/ebook/${bookId}`);
+      // Get the current session token to send with the request
+      const { createClient } = await import('@/lib/supabase');
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const res  = await fetch(`/api/ebook/${bookId}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
       const data = await res.json();
       if (data.url) {
         window.open(data.url, '_blank', 'noopener,noreferrer');
