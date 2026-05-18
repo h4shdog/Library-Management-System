@@ -9,8 +9,38 @@ import { createClient } from '@/lib/supabase';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/shared/StatusBadge';
-import { Calendar, X, ExternalLink, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Calendar, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useState, useEffect } from 'react';
+
+// Fetches a short-lived signed URL from the secure API route and opens the PDF
+function OpenEbookButton({ bookId }) {
+  const [loading, setLoading] = useState(false);
+  const handleOpen = async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch(`/api/ebook/${bookId}`);
+      const data = await res.json();
+      if (data.url) {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      } else {
+        alert(data.error || 'Could not open eBook. Please try again.');
+      }
+    } catch {
+      alert('Could not open eBook. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <button
+      onClick={handleOpen}
+      disabled={loading}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold rounded-lg transition-colors w-fit"
+    >
+      {loading ? 'Opening...' : '📖 Open eBook'}
+    </button>
+  );
+}
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,
@@ -257,7 +287,7 @@ export default function MyRequestsPage() {
                           </div>
                         )}
 
-                        {/* Open eBook button — only if approved, has URL, and due date not passed */}
+                        {/* Open eBook button — calls secure API route */}
                         {req.type === 'ebook_access' && req.status === 'approved' && (() => {
                           const due = req.due_date ? new Date(req.due_date) : null;
                           const isExpired = due && due < new Date();
@@ -269,17 +299,10 @@ export default function MyRequestsPage() {
                               </div>
                             );
                           }
-                          if (book?.ebookUrl) {
+                          if (book?.ebookPath || book?.ebookUrl) {
                             return (
                               <div className="mt-2 flex flex-col gap-1">
-                                <a
-                                  href={book.ebookUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors w-fit"
-                                >
-                                  <ExternalLink size={11} /> Open eBook
-                                </a>
+                                <OpenEbookButton bookId={req.book_id} />
                                 {due && (
                                   <span className="text-[10px] text-slate-400">
                                     Access until {due.toLocaleDateString()}
