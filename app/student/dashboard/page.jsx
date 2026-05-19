@@ -17,6 +17,7 @@ import { CardSkeleton } from '@/components/shared/Skeleton';
 import Link from 'next/link';
 import { BookOpen, Clock, CheckCircle, Bell, ArrowRight, Sparkles } from 'lucide-react';
 import { LibraryHours } from '@/components/shared/LibraryHours';
+import { useDueNotifications } from '@/hooks/useDueNotifications';
 
 const notifTypeColor = {
   success: 'bg-emerald-50 border-emerald-100 text-emerald-700',
@@ -36,6 +37,7 @@ export default function StudentDashboard() {
 function DashboardContent() {
   const { user, updateUser, allBooks } = useAuth();
   const searchParams = useSearchParams();
+  useDueNotifications(user?.id);
   const [showGenreModal, setShowGenreModal] = useState(false);
   const [selectedGenres, setSelectedGenres] = useState(user?.preferredGenres || []);
   const [recommendedBooks, setRecommendedBooks] = useState([]);

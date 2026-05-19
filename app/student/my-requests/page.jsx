@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { Calendar, X, AlertTriangle, RotateCcw } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { useDueNotifications } from '@/hooks/useDueNotifications';
 
 // Fetches a short-lived signed URL from the secure API route and opens the PDF
 function OpenEbookButton({ bookId }) {
@@ -67,6 +68,7 @@ const statusStyle = {
 
 export default function MyRequestsPage() {
   const { user, allBooks } = useAuth();
+  useDueNotifications(user?.id);
   const [requests, setRequests] = useState([]);
   const [confirm, setConfirm]         = useState({ isOpen: false, id: null, title: '' });
   const [returnConfirm, setReturnConfirm] = useState({ isOpen: false, id: null, title: '' });
