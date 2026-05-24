@@ -269,18 +269,7 @@ export default function AuthPage() {
               {/* Password — not shown in forgot mode */}
               {mode !== 'forgot' && (
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-semibold text-slate-700">Password</label>
-                  {mode === 'login' && (
-                    <button
-                      type="button"
-                      onClick={() => { setMode('forgot'); setError(''); setSignupSuccess(false); }}
-                      className="text-xs text-violet-600 hover:text-violet-700 font-medium"
-                    >
-                      Forgot password?
-                    </button>
-                  )}
-                </div>
+                <label className="text-sm font-semibold text-slate-700">Password</label>
                 <div className="relative">
                   <Input
                     type={showPassword ? 'text' : 'password'}
@@ -299,6 +288,17 @@ export default function AuthPage() {
                     {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {mode === 'login' && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => { setMode('forgot'); setError(''); setSignupSuccess(false); }}
+                      className="text-xs text-violet-600 hover:text-violet-700 font-medium"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
               </div>
               )}
 
