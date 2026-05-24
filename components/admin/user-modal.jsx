@@ -5,26 +5,37 @@
 // ============================================================
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { X } from 'lucide-react';
 
+const emptyForm = {
+  name: '',
+  email: '',
+  role: 'student',
+  phone: '',
+  address: '',
+  password: '',
+  confirmPassword: '',
+};
+
 export function UserModal({ isOpen, user, onClose, onSave }) {
-  const [formData, setFormData] = useState(
-    user || {
-      name: '',
-      email: '',
-      role: 'student',
-      phone: '',
-      address: '',
-      password: '',
-      confirmPassword: '',
-    }
-  );
+  const [formData, setFormData] = useState(user ? { ...emptyForm, ...user, password: '', confirmPassword: '' } : { ...emptyForm });
   const [errors, setErrors] = useState({});
   const [isSaving, setIsSaving] = useState(false);
+
+  // Re-initialize form whenever the modal opens or the user changes
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(user
+        ? { ...emptyForm, ...user, password: '', confirmPassword: '' }
+        : { ...emptyForm }
+      );
+      setErrors({});
+    }
+  }, [isOpen, user]);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
