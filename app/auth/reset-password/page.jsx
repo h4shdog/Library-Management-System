@@ -20,11 +20,25 @@ export default function ResetPasswordPage() {
   const [validSession, setValidSession]       = useState(false);
 
   useEffect(() => {
-    // Supabase puts the access token in the URL hash after clicking the reset link
+    // Supabase puts the recovery token in the URL hash after clicking the reset link.
+    // We listen for the PASSWORD_RECOVERY event which fires once Supabase
+    // processes the hash and establishes a temporary session.
     const supabase = createClient();
+
+    // Check if there's already a valid session (e.g. user navigated back)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setValidSession(true);
     });
+
+    // Listen for the recovery event fired when the hash token is consumed
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        setValidSession(true);
+        setError('');
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleReset = async (e) => {
@@ -85,6 +99,19 @@ export default function ResetPasswordPage() {
               </div>
             )}
 
+            {/* Auth session missing */}
+            {!validSession && !success && (
+              <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-100">
+                <AlertCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-red-700">Auth session missing!</p>
+                  <p className="text-xs text-red-600 mt-0.5">
+                    Please use the reset link sent to your email. The link may have expired — request a new one.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Error */}
             {error && (
               <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-100">
@@ -103,7 +130,7 @@ export default function ResetPasswordPage() {
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !validSession}
                       required
                       className="h-10 border-slate-200 rounded-xl pr-10"
                     />
@@ -121,7 +148,7 @@ export default function ResetPasswordPage() {
                       placeholder="••••••••"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || !validSession}
                       required
                       className="h-10 border-slate-200 rounded-xl pr-10"
                     />
@@ -133,8 +160,8 @@ export default function ResetPasswordPage() {
 
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full h-11 rounded-xl font-semibold bg-violet-600 hover:bg-violet-700 text-white shadow-sm"
+                  disabled={isSubmitting || !validSession}
+                  className="w-full h-11 rounded-xl font-semibold bg-violet-600 hover:bg-violet-700 text-white shadow-sm disabled:opacity-50"
                 >
                   {isSubmitting
                     ? <><Loader size={15} className="animate-spin mr-2" />Updating password…</>
