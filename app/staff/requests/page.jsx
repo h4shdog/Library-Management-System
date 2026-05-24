@@ -103,7 +103,6 @@ export default function StaffRequestsPage() {
       await supabase.from('books').update({ availability: book.availability - 1 }).eq('id', book.id);
       await loadAllBooks();
     }
-
     if (req?.user_id) {
       const message = isEbook
         ? `Your eBook access request for "${book?.title || 'a book'}" has been approved. You can read it until ${new Date(dueDate).toLocaleDateString()}.`
@@ -164,9 +163,10 @@ export default function StaffRequestsPage() {
       .eq('id', id);
     if (error) return;
 
-    // Increment availability back for physical books
+    // Increment availability back for physical books (cap at totalCopies)
     if (!isEbook && book) {
-      await supabase.from('books').update({ availability: book.availability + 1 }).eq('id', book.id);
+      const newAvailability = Math.min(book.availability + 1, book.totalCopies ?? book.availability + 1);
+      await supabase.from('books').update({ availability: newAvailability }).eq('id', book.id);
       await loadAllBooks();
     }
 
@@ -222,8 +222,15 @@ export default function StaffRequestsPage() {
   const approved        = requests.filter((r) => r.status === 'approved');
   const returnRequested = requests.filter((r) => r.status === 'return_requested');
   const rejected        = requests.filter((r) => r.status === 'rejected');
+  // Fines: completed requests with a recorded fine_amount
   const withFines       = requests.filter((r) => r.fine_amount > 0);
   const unpaidFines     = withFines.filter((r) => !r.fine_paid);
+  // Overdue active requests (approved, not yet returned, past due date)
+  const overdueActive   = requests.filter((r) =>
+    (r.status === 'approved' || r.status === 'return_requested') &&
+    r.type !== 'ebook_access' &&
+    r.due_date && new Date(r.due_date) < new Date()
+  );
 
   return (
     <div className="space-y-6">
@@ -490,84 +497,152 @@ export default function StaffRequestsPage() {
       {/* ── FINES TAB ── */}
       {activeTab === 'fines' && (
         <>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Card className="border border-red-100 bg-red-50 p-5 rounded-2xl">
               <AlertTriangle size={18} className="text-red-500 mb-3" />
-              <p className="text-2xl font-bold text-red-600">{unpaidFines.length}</p>
+              <p className="text-2xl font-bold text-red-600">{unpaidFines.length + overdueActive.length}</p>
               <p className="text-xs text-slate-500 mt-0.5">Unpaid Fines</p>
+            </Card>
+            <Card className="border border-amber-100 bg-amber-50 p-5 rounded-2xl">
+              <AlertTriangle size={18} className="text-amber-500 mb-3" />
+              <p className="text-2xl font-bold text-amber-600">{overdueActive.length}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Currently Overdue</p>
             </Card>
             <Card className="border border-slate-100 bg-slate-50 p-5 rounded-2xl">
               <PhilippinePeso size={18} className="text-slate-500 mb-3" />
               <p className="text-2xl font-bold text-slate-700">
-                ₱{unpaidFines.reduce((s, r) => s + (r.fine_amount || 0), 0).toFixed(2)}
+                ₱{(
+                  unpaidFines.reduce((s, r) => s + (r.fine_amount || 0), 0) +
+                  overdueActive.reduce((s, r) => s + calcFine(r.due_date, fineRate), 0)
+                ).toFixed(2)}
               </p>
               <p className="text-xs text-slate-500 mt-0.5">Total Outstanding</p>
             </Card>
           </div>
 
-          {withFines.length === 0 ? (
+          {/* Currently overdue — not yet returned */}
+          {overdueActive.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wider flex items-center gap-2">
+                <AlertTriangle size={13} /> Currently Overdue ({overdueActive.length})
+              </p>
+              <Card className="border border-amber-100 bg-white rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-amber-50 border-b border-amber-100">
+                      <tr>
+                        {['Student', 'Book', 'Due Date', 'Days Overdue', 'Accruing Fine', 'Action'].map((h) => (
+                          <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {overdueActive.map((req) => {
+                        const book      = getBook(req.book_id);
+                        const fine      = calcFine(req.due_date, fineRate);
+                        const daysOver  = Math.floor((new Date() - new Date(req.due_date)) / 86400000);
+                        return (
+                          <tr key={req.id} className="hover:bg-amber-50 transition-colors">
+                            <td className="py-3 px-5">
+                              <p className="text-sm font-semibold text-slate-800">{req.profiles?.name || '—'}</p>
+                              <p className="text-xs text-slate-400">{req.profiles?.email || ''}</p>
+                            </td>
+                            <td className="py-3 px-5 text-sm text-slate-700">{book?.title || 'Unknown'}</td>
+                            <td className="py-3 px-5 text-xs text-red-600 font-semibold">
+                              {new Date(req.due_date).toLocaleDateString()}
+                            </td>
+                            <td className="py-3 px-5">
+                              <Badge className="bg-red-100 text-red-700 border-0 text-xs font-bold">
+                                {daysOver} day{daysOver !== 1 ? 's' : ''}
+                              </Badge>
+                            </td>
+                            <td className="py-3 px-5">
+                              <span className="text-sm font-bold text-red-600">₱{fine.toFixed(2)}</span>
+                            </td>
+                            <td className="py-3 px-5">
+                              <Button
+                                onClick={() => markReturned(req.id)}
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-7 text-xs"
+                              >
+                                Mark Returned
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Completed fines */}
+          {withFines.length === 0 && overdueActive.length === 0 ? (
             <Card className="border border-slate-100 bg-white p-8 rounded-2xl text-center">
               <CheckCircle size={28} className="mx-auto text-emerald-300 mb-2" />
               <p className="text-sm font-semibold text-slate-700">No fines recorded</p>
+              <p className="text-xs text-slate-400 mt-1">All books are returned on time</p>
             </Card>
-          ) : (
-            <Card className="border border-slate-100 bg-white rounded-2xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-slate-50">
-                <p className="text-sm font-semibold text-slate-900">Students with Fines</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50 border-b border-slate-100">
-                    <tr>
-                      {['Student', 'Book', 'Due Date', 'Return Date', 'Fine', 'Status', 'Action'].map((h) => (
-                        <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-50">
-                    {withFines.map((req) => {
-                      const book = getBook(req.book_id);
-                      return (
-                        <tr key={req.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-5">
-                            <p className="text-sm font-semibold text-slate-800">{req.profiles?.name || '—'}</p>
-                            <p className="text-xs text-slate-400">{req.profiles?.email || ''}</p>
-                          </td>
-                          <td className="py-3 px-5 text-sm text-slate-700">{book?.title || 'Unknown'}</td>
-                          <td className="py-3 px-5 text-xs text-slate-500">
-                            {req.due_date ? new Date(req.due_date).toLocaleDateString() : '—'}
-                          </td>
-                          <td className="py-3 px-5 text-xs text-slate-500">
-                            {req.return_date ? new Date(req.return_date).toLocaleDateString() : '—'}
-                          </td>
-                          <td className="py-3 px-5">
-                            <span className="text-sm font-bold text-red-600">₱{(req.fine_amount || 0).toFixed(2)}</span>
-                          </td>
-                          <td className="py-3 px-5">
-                            {req.fine_paid ? (
-                              <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Paid</Badge>
-                            ) : (
-                              <Badge className="bg-red-100 text-red-600 border-0 text-xs">Unpaid</Badge>
-                            )}
-                          </td>
-                          <td className="py-3 px-5">
-                            {!req.fine_paid && (
-                              <Button
-                                onClick={() => markFinePaid(req.id)}
-                                size="sm"
-                                className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl h-7 text-xs"
-                              >
-                                Mark Paid
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+          ) : withFines.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Returned with Fines</p>
+              <Card className="border border-slate-100 bg-white rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        {['Student', 'Book', 'Due Date', 'Return Date', 'Fine', 'Status', 'Action'].map((h) => (
+                          <th key={h} className="text-left py-3 px-5 text-xs font-semibold text-slate-500 uppercase tracking-wide">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {withFines.map((req) => {
+                        const book = getBook(req.book_id);
+                        return (
+                          <tr key={req.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-3 px-5">
+                              <p className="text-sm font-semibold text-slate-800">{req.profiles?.name || '—'}</p>
+                              <p className="text-xs text-slate-400">{req.profiles?.email || ''}</p>
+                            </td>
+                            <td className="py-3 px-5 text-sm text-slate-700">{book?.title || 'Unknown'}</td>
+                            <td className="py-3 px-5 text-xs text-slate-500">
+                              {req.due_date ? new Date(req.due_date).toLocaleDateString() : '—'}
+                            </td>
+                            <td className="py-3 px-5 text-xs text-slate-500">
+                              {req.return_date ? new Date(req.return_date).toLocaleDateString() : '—'}
+                            </td>
+                            <td className="py-3 px-5">
+                              <span className="text-sm font-bold text-red-600">₱{(req.fine_amount || 0).toFixed(2)}</span>
+                            </td>
+                            <td className="py-3 px-5">
+                              {req.fine_paid ? (
+                                <Badge className="bg-emerald-100 text-emerald-700 border-0 text-xs">Paid</Badge>
+                              ) : (
+                                <Badge className="bg-red-100 text-red-600 border-0 text-xs">Unpaid</Badge>
+                              )}
+                            </td>
+                            <td className="py-3 px-5">
+                              {!req.fine_paid && (
+                                <Button
+                                  onClick={() => markFinePaid(req.id)}
+                                  size="sm"
+                                  className="bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl h-7 text-xs"
+                                >
+                                  Mark Paid
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
           )}
         </>
       )}
